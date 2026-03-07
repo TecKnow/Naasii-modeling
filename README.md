@@ -13,4 +13,5 @@ Players attempt to form sets of at least three of the same number or runs of at 
 
 ## Marimo notebook
 ```bash
-uv run --with marimo marimo run 
+uv run --with marimo[recommended] marimo edit naasii-modeling.py
+```
