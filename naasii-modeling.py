@@ -18,6 +18,24 @@ with app.setup(hide_code=True):
     import numpy as np
 
     SIDES = 12
+    TRIAL_STEPS = (
+        1,
+        2,
+        5,
+        10,
+        20,
+        50,
+        100,
+        200,
+        500,
+        1_000,
+        2_000,
+        5_000,
+        10_000,
+        20_000,
+        50_000,
+        100_000,
+    )
 
 
 @app.function(hide_code=True)
@@ -106,16 +124,14 @@ def _():
 @app.cell(hide_code=True)
 def _():
     uniform_trials = mo.ui.slider(
-        start=1_000,
-        stop=100_000,
-        step=1_000,
+        steps=TRIAL_STEPS,
         value=20_000,
         label="Single-die simulation trials",
     )
     mo.vstack(
         [
             mo.md(
-                "Adjust the trial count for the single-die simulation, then compare the observed face frequencies to the exact uniform model."
+                "Adjust the trial count for the single-die simulation, then compare the observed face frequencies to the exact uniform model. The slider uses log-spaced values so you can jump quickly between very small and very large samples."
             ),
             uniform_trials,
         ]
@@ -331,9 +347,7 @@ def _():
 @app.cell(hide_code=True)
 def _():
     multi_trials = mo.ui.slider(
-        start=1_000,
-        stop=100_000,
-        step=1_000,
+        steps=TRIAL_STEPS,
         value=20_000,
         label="Multiple-dice simulation trials",
     )
@@ -354,7 +368,7 @@ def _():
     mo.vstack(
         [
             mo.md(
-                "Adjust the controls for the multiple-dice model, then compare the exact total distribution to a Monte Carlo simulation."
+                "Adjust the controls for the multiple-dice model, then compare the exact total distribution to a Monte Carlo simulation. The trial slider uses log-spaced values so you can move quickly from noisy small samples to stable large ones."
             ),
             multi_trials,
             num_dice,
