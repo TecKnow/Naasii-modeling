@@ -93,6 +93,10 @@ def _(mo):
     ```bash
     uv run --with marimo[recommended] marimo edit --sandbox naasii-modeling.py
     ```
+    ### Testing this notebook
+    ```bash
+    uv run --with-requirements naasii-modeling.py pytest naasii-modeling.py
+    ```
     """)
     return
 
@@ -602,7 +606,14 @@ def _(np):
 
 
 @app.cell
-def _(SIDES, np, roll_d12s):
+def _(
+    SIDES,
+    chi_squared_uniformity,
+    exact_sum_distribution,
+    np,
+    roll_d12s,
+    running_event_rate,
+):
     def test_roll_d12s_shape():
         rng = np.random.default_rng(7)
         rolls = roll_d12s(rng, trials=7, num_dice=3)
@@ -625,6 +636,68 @@ def _(SIDES, np, roll_d12s):
         rolls_b = roll_d12s(rng_b, trials=25, num_dice=2)
 
         assert np.array_equal(rolls_a, rolls_b)
+
+    def test_chi_squared_uniformity_uniform_counts():
+        chi_square, expected_count, degrees_freedom = chi_squared_uniformity(
+            np.array([5, 5, 5, 5])
+        )
+
+        assert chi_square == 0.0
+        assert expected_count == 5.0
+        assert degrees_freedom == 3
+
+    def test_chi_squared_uniformity_known_counts():
+        chi_square, expected_count, degrees_freedom = chi_squared_uniformity(
+            np.array([8, 2, 5, 5])
+        )
+
+        assert np.isclose(chi_square, 3.6)
+        assert expected_count == 5.0
+        assert degrees_freedom == 3
+
+    def test_chi_squared_uniformity_requires_one_dimension():
+        try:
+            chi_squared_uniformity(np.ones((2, 2), dtype=np.int64))
+        except ValueError as exc:
+            assert str(exc) == "observed_counts must be one-dimensional"
+        else:
+            assert False, "Expected ValueError for non-1D observed_counts"
+
+    def test_exact_sum_distribution_single_die_is_uniform():
+        totals, probabilities = exact_sum_distribution(num_dice=1)
+
+        assert np.array_equal(totals, np.arange(1, SIDES + 1))
+        assert np.allclose(probabilities, np.full(SIDES, 1 / SIDES))
+
+    def test_exact_sum_distribution_two_dice_known_probabilities():
+        totals, probabilities = exact_sum_distribution(num_dice=2)
+
+        assert totals[0] == 2
+        assert totals[-1] == 2 * SIDES
+        assert np.isclose(probabilities[0], 1 / SIDES**2)
+        assert np.isclose(probabilities[-1], 1 / SIDES**2)
+        assert np.isclose(probabilities[SIDES - 1], 1 / SIDES)
+
+    def test_exact_sum_distribution_probabilities_sum_to_one():
+        _, probabilities = exact_sum_distribution(num_dice=4)
+
+        assert np.isclose(probabilities.sum(), 1.0)
+
+    def test_running_event_rate_uses_all_points_when_input_is_short():
+        sample_sizes, running_rates = running_event_rate(
+            np.array([True, False, True, True]), points=30
+        )
+
+        assert np.array_equal(sample_sizes, np.array([1, 2, 3, 4]))
+        assert np.allclose(running_rates, np.array([1.0, 0.5, 2 / 3, 0.75]))
+
+    def test_running_event_rate_respects_requested_checkpoints():
+        sample_sizes, running_rates = running_event_rate(
+            np.array([1, 0, 1, 1, 0, 0, 1, 0, 0, 1]), points=3
+        )
+
+        assert np.array_equal(sample_sizes, np.array([1, 5, 10]))
+        assert np.allclose(running_rates, np.array([1.0, 0.6, 0.5]))
 
     return
 
