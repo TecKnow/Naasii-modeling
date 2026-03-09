@@ -4,6 +4,7 @@
 #     "marimo>=0.20.4",
 #     "matplotlib==3.10.8",
 #     "numpy==2.4.2",
+#     "pytest==9.0.2",
 # ]
 # ///
 
@@ -598,6 +599,34 @@ def _(np):
         return sample_sizes, cumulative_hits[sample_sizes - 1] / sample_sizes
 
     return (running_event_rate,)
+
+
+@app.cell
+def _(SIDES, np, roll_d12s):
+    def test_roll_d12s_shape():
+        rng = np.random.default_rng(7)
+        rolls = roll_d12s(rng, trials=7, num_dice=3)
+
+        assert rolls.shape == (7, 3)
+
+    def test_roll_d12s_integer_bounds():
+        rng = np.random.default_rng(17)
+        rolls = roll_d12s(rng, trials=200, num_dice=4)
+
+        assert np.issubdtype(rolls.dtype, np.integer)
+        assert rolls.min() >= 1
+        assert rolls.max() <= SIDES
+
+    def test_roll_d12s_seed_reproducibility():
+        rng_a = np.random.default_rng(23)
+        rng_b = np.random.default_rng(23)
+
+        rolls_a = roll_d12s(rng_a, trials=25, num_dice=2)
+        rolls_b = roll_d12s(rng_b, trials=25, num_dice=2)
+
+        assert np.array_equal(rolls_a, rolls_b)
+
+    return
 
 
 if __name__ == "__main__":
