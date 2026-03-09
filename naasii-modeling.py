@@ -1,9 +1,9 @@
 # /// script
 # requires-python = ">=3.13"
 # dependencies = [
-#     "marimo>=0.20.4",
+#     "marimo[recommended]==0.20.4",
 #     "matplotlib==3.10.8",
-#     "numpy==2.4.2",
+#     "numpy==2.4.3",
 #     "pytest==9.0.2",
 # ]
 # ///
@@ -13,9 +13,8 @@ import marimo
 __generated_with = "0.20.4"
 app = marimo.App(width="medium")
 
-
-@app.cell(hide_code=True)
-def _():
+with app.setup:
+    # Initialization code that runs before all other cells
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
@@ -40,11 +39,10 @@ def _():
         50_000,
         100_000,
     )
-    return SIDES, TRIAL_STEPS, mo, np, plt
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     # Naasii modeling
     """)
@@ -52,28 +50,30 @@ def _(mo):
 
 
 @app.cell
-def _(mo):
+def _():
     mo.md(r"""
-    The purpose of this notebook is to statistically model the dice game Naasii by Coyote and Crow games.  This will be accomplished incrementally, starting from a single die, then multiple dice, then dice pools and so on.  The basic game will also be modeled before advanced rules are added.  Although modeling is at an early stage it seems most likely that the game itself will eventually be modeled with a Markov decision process.
+    The purpose of this notebook is to statistically model the dice game Naasii by Coyote and Crow games. This will be accomplished incrementally, starting from a single die, then multiple dice, then dice pools and so on. The basic game will also be modeled before advanced rules are added. Although modeling is at an early stage it seems most likely that the game itself will eventually be modeled with a Markov decision process.
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ## The Naasii game
-    **Naasii** is a push-your-luck dice game for 2-5 players that takes about an hour to play.  Like the Coyote & Crow TTRPG, Naasii is based on 12-sided dice divided into two groups.  Naasii uses 9 white Coyote dice and 3 black Crow dice.
 
-    Players attempt to form sets of at least three of the same number or runs of at least three sequential numbers across multiple rolls on their turn.  Each roll after the first provides additional white Coyote dice, but also adds a black Crow die that can cancel dice or even cause the player to bust, ending their turn early with no score.  Players may end their turn after any roll where they can score.
+    **Naasii** is a push-your-luck dice game for 2-5 players that takes about an hour to play. Like the Coyote & Crow TTRPG, Naasii is based on 12-sided dice divided into two groups. Naasii uses 9 white Coyote dice and 3 black Crow dice.
+
+    Players attempt to form sets of at least three of the same number or runs of at least three sequential numbers across multiple rolls on their turn. Each roll after the first provides additional white Coyote dice, but also adds a black Crow die that can cancel dice or even cause the player to bust, ending their turn early with no score. Players may end their turn after any roll where they can score.
     """)
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ### Game resources
+
     - Official website: https://coyoteandcrow.net/board-game-resources/#Naasii
     - Rules: https://coyoteandcrow.net/wp-content/uploads/2025/12/Naasii-Rules-3.0.pdf
     - Scorecard: https://coyoteandcrow.net/wp-content/uploads/2023/10/Naasii-Scorecard.pdf
@@ -82,18 +82,24 @@ def _(mo):
 
 
 @app.cell
-def _(mo):
+def _():
     mo.md(r"""
     ## Interacting with this notebook
+
     ### Running this notebook
+
     ```bash
     uv run --with marimo[recommended] marimo run --sandbox naasii-modeling.py
     ```
+
     ### Editing this notebook
+
     ```bash
     uv run --with marimo[recommended] marimo edit --sandbox naasii-modeling.py
     ```
+
     ### Testing this notebook
+
     ```bash
     uv run --with-requirements naasii-modeling.py pytest naasii-modeling.py
     ```
@@ -102,7 +108,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ## Why start here?
 
@@ -121,7 +127,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ## Uniformity check for one d12
 
@@ -133,7 +139,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(TRIAL_STEPS, mo):
+def _():
     uniform_trials = mo.ui.slider(
         steps=TRIAL_STEPS,
         value=20_000,
@@ -151,7 +157,7 @@ def _(TRIAL_STEPS, mo):
 
 
 @app.cell(hide_code=True)
-def _(SIDES, chi_squared_uniformity, np, roll_d12s, uniform_trials):
+def _(uniform_trials):
     uniform_rng = np.random.default_rng()
     single_die_rolls = roll_d12s(uniform_rng, uniform_trials.value, num_dice=1).ravel()
     single_die_faces = np.arange(1, SIDES + 1)
@@ -182,7 +188,6 @@ def _(SIDES, chi_squared_uniformity, np, roll_d12s, uniform_trials):
 @app.cell(hide_code=True)
 def _(
     exact_single_die_probability,
-    plt,
     single_die_faces,
     single_die_probabilities,
 ):
@@ -211,13 +216,13 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     To make the visual check more precise, we also compute Pearson's chi-squared
     goodness-of-fit statistic
 
     \[
-    \chi^2 = \sum_{i=1}^{12} \frac{(O_i - E_i)^2}{E_i},
+    \chi^2 = \sum\_{i=1}^{12} \frac{(O_i - E_i)^2}{E_i},
     \]
 
     where \(O_i\) is the observed count for face \(i\), and \(E_i = n/12\) is the
@@ -239,7 +244,7 @@ def _(mo):
     larger than we would usually expect from random variation alone.
 
     Under the fair-die model, this statistic is approximately distributed as
-    \(\chi^2_{11}\). The \(11\) degrees of freedom come from the fact that there are
+    \(\chi^2\_{11}\). The \(11\) degrees of freedom come from the fact that there are
     \(12\) face counts, but once \(11\) of them are known, the last one is fixed because
     the counts must sum to the total number of rolls.
 
@@ -248,16 +253,16 @@ def _(mo):
     \(19.675\). More precisely, this number is chosen so that
 
     \[
-    P(\chi^2_{11} \le 19.675) \approx 0.95,
+    P(\chi^2\_{11} \le 19.675) \approx 0.95,
     \]
 
-    which means \(19.675\) is the 95th percentile of the \(\chi^2_{11}\)
+    which means \(19.675\) is the 95th percentile of the \(\chi^2\_{11}\)
     distribution, or equivalently the point that leaves 5% of the distribution in the
     upper tail.
 
     Historically, one would usually look this up in a chi-squared table. In modern
     practice, one often gets it from software. For example, statistics software would
-    compute the same cutoff as the inverse CDF, or quantile, of \(\chi^2_{11}\) at
+    compute the same cutoff as the inverse CDF, or quantile, of \(\chi^2\_{11}\) at
     probability \(0.95\). In this notebook the value is hard-coded because the number of
     faces is fixed, so the degrees of freedom are fixed at \(11\).
 
@@ -277,7 +282,6 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(
     exact_single_die_probability,
-    mo,
     single_die_chi_square,
     single_die_critical_value,
     single_die_df,
@@ -290,9 +294,7 @@ def _(
     chi_square_conclusion = "This sample is consistent with a fair d12 at the 5% level."
     if not single_die_uniformity_passes:
         chi_square_interpretation = "exceeds"
-        chi_square_conclusion = (
-            "This sample would be flagged by the 5% chi-squared check."
-        )
+        chi_square_conclusion = "This sample would be flagged by the 5% chi-squared check."
 
     mo.md(
         f"""
@@ -319,7 +321,7 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ## Exact distribution and Monte Carlo estimate
 
@@ -358,7 +360,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(SIDES, TRIAL_STEPS, mo):
+def _():
     multi_trials = mo.ui.slider(
         steps=TRIAL_STEPS,
         value=20_000,
@@ -392,18 +394,11 @@ def _(SIDES, TRIAL_STEPS, mo):
 
 
 @app.cell(hide_code=True)
-def _(
-    SIDES,
-    exact_sum_distribution,
-    multi_trials,
-    np,
-    num_dice,
-    roll_d12s,
-    running_event_rate,
-    target_sum,
-):
+def _(multi_trials, num_dice, target_sum):
     sum_rng = np.random.default_rng()
-    effective_target = int(np.clip(target_sum.value, num_dice.value, num_dice.value * SIDES))
+    effective_target = int(
+        np.clip(target_sum.value, num_dice.value, num_dice.value * SIDES)
+    )
     rolls = roll_d12s(sum_rng, multi_trials.value, num_dice.value)
     totals = rolls.sum(axis=1)
 
@@ -434,7 +429,7 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(exact_probabilities, plt, possible_totals, simulated_probabilities):
+def _(exact_probabilities, possible_totals, simulated_probabilities):
     dist_fig, dist_ax = plt.subplots(figsize=(10, 4.5))
     dist_ax.bar(
         possible_totals - 0.2,
@@ -464,7 +459,6 @@ def _(
     effective_target,
     exact_event_probability,
     exact_expected_total,
-    mo,
     multi_trials,
     num_dice,
     simulated_event_probability,
@@ -507,7 +501,6 @@ def _(
     event_running_rates,
     event_sample_sizes,
     exact_event_probability,
-    plt,
 ):
     conv_fig, conv_ax = plt.subplots(figsize=(10, 4))
     conv_ax.plot(
@@ -533,7 +526,7 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _():
     mo.md(r"""
     ## Connection to Naasii
 
@@ -553,72 +546,58 @@ def _(mo):
     return
 
 
-@app.cell
-def _(SIDES, np):
-    def roll_d12s(rng: np.random.Generator, trials: int, num_dice: int) -> np.ndarray:
-        """Return a trials-by-num_dice array of simulated d12 rolls."""
-        return rng.integers(1, SIDES, size=(trials, num_dice), endpoint=True)
-
-    return (roll_d12s,)
+@app.function
+def roll_d12s(rng: np.random.Generator, trials: int, num_dice: int) -> np.ndarray:
+    """Return a trials-by-num_dice array of simulated d12 rolls."""
+    return rng.integers(1, SIDES, size=(trials, num_dice), endpoint=True)
 
 
-@app.cell(hide_code=True)
-def _(np):
-    def chi_squared_uniformity(observed_counts: np.ndarray) -> tuple[float, float, int]:
-        """Compute Pearson's chi-squared statistic for a uniform categorical distribution."""
-        if observed_counts.ndim != 1:
-            raise ValueError("observed_counts must be one-dimensional")
+@app.function(hide_code=True)
+def chi_squared_uniformity(observed_counts: np.ndarray) -> tuple[float, float, int]:
+    """Compute Pearson's chi-squared statistic for a uniform categorical distribution."""
+    if observed_counts.ndim != 1:
+        raise ValueError("observed_counts must be one-dimensional")
 
-        expected_count = observed_counts.sum() / observed_counts.size
-        chi_square = np.sum((observed_counts - expected_count) ** 2 / expected_count)
-        degrees_freedom = observed_counts.size - 1
-        return float(chi_square), float(expected_count), int(degrees_freedom)
-
-    return (chi_squared_uniformity,)
+    expected_count = observed_counts.sum() / observed_counts.size
+    chi_square = np.sum((observed_counts - expected_count) ** 2 / expected_count)
+    degrees_freedom = observed_counts.size - 1
+    return float(chi_square), float(expected_count), int(degrees_freedom)
 
 
-@app.cell(hide_code=True)
-def _(SIDES, np):
-    def exact_sum_distribution(num_dice: int, sides: int = SIDES) -> tuple[np.ndarray, np.ndarray]:
-        """Compute the exact probability distribution for the sum of fair dice."""
-        counts = np.ones(sides, dtype=np.int64)
-        for _ in range(1, num_dice):
-            counts = np.convolve(counts, np.ones(sides, dtype=np.int64))
+@app.function(hide_code=True)
+def exact_sum_distribution(
+    num_dice: int, sides: int = SIDES
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute the exact probability distribution for the sum of fair dice."""
+    counts = np.ones(sides, dtype=np.int64)
+    for _ in range(1, num_dice):
+        counts = np.convolve(counts, np.ones(sides, dtype=np.int64))
 
-        totals = np.arange(num_dice, num_dice * sides + 1)
-        probabilities = counts / counts.sum()
-        return totals, probabilities
-
-    return (exact_sum_distribution,)
+    totals = np.arange(num_dice, num_dice * sides + 1)
+    probabilities = counts / counts.sum()
+    return totals, probabilities
 
 
-@app.cell(hide_code=True)
-def _(np):
-    def running_event_rate(event_hits: np.ndarray, points: int = 30) -> tuple[np.ndarray, np.ndarray]:
-        """Sample the cumulative event rate at evenly spaced checkpoints."""
-        sample_sizes = np.unique(
-            np.linspace(1, event_hits.size, num=min(points, event_hits.size), dtype=int)
-        )
-        cumulative_hits = np.cumsum(event_hits.astype(np.int64))
-        return sample_sizes, cumulative_hits[sample_sizes - 1] / sample_sizes
-
-    return (running_event_rate,)
+@app.function(hide_code=True)
+def running_event_rate(
+    event_hits: np.ndarray, points: int = 30
+) -> tuple[np.ndarray, np.ndarray]:
+    """Sample the cumulative event rate at evenly spaced checkpoints."""
+    sample_sizes = np.unique(
+        np.linspace(1, event_hits.size, num=min(points, event_hits.size), dtype=int)
+    )
+    cumulative_hits = np.cumsum(event_hits.astype(np.int64))
+    return sample_sizes, cumulative_hits[sample_sizes - 1] / sample_sizes
 
 
 @app.cell
-def _(
-    SIDES,
-    chi_squared_uniformity,
-    exact_sum_distribution,
-    np,
-    roll_d12s,
-    running_event_rate,
-):
+def _():
     def test_roll_d12s_shape():
         rng = np.random.default_rng(7)
         rolls = roll_d12s(rng, trials=7, num_dice=3)
 
         assert rolls.shape == (7, 3)
+
 
     def test_roll_d12s_integer_bounds():
         rng = np.random.default_rng(17)
@@ -627,6 +606,7 @@ def _(
         assert np.issubdtype(rolls.dtype, np.integer)
         assert rolls.min() >= 1
         assert rolls.max() <= SIDES
+
 
     def test_roll_d12s_seed_reproducibility():
         rng_a = np.random.default_rng(23)
@@ -637,6 +617,7 @@ def _(
 
         assert np.array_equal(rolls_a, rolls_b)
 
+
     def test_chi_squared_uniformity_uniform_counts():
         chi_square, expected_count, degrees_freedom = chi_squared_uniformity(
             np.array([5, 5, 5, 5])
@@ -645,6 +626,7 @@ def _(
         assert chi_square == 0.0
         assert expected_count == 5.0
         assert degrees_freedom == 3
+
 
     def test_chi_squared_uniformity_known_counts():
         chi_square, expected_count, degrees_freedom = chi_squared_uniformity(
@@ -655,6 +637,7 @@ def _(
         assert expected_count == 5.0
         assert degrees_freedom == 3
 
+
     def test_chi_squared_uniformity_requires_one_dimension():
         try:
             chi_squared_uniformity(np.ones((2, 2), dtype=np.int64))
@@ -663,11 +646,13 @@ def _(
         else:
             assert False, "Expected ValueError for non-1D observed_counts"
 
+
     def test_exact_sum_distribution_single_die_is_uniform():
         totals, probabilities = exact_sum_distribution(num_dice=1)
 
         assert np.array_equal(totals, np.arange(1, SIDES + 1))
         assert np.allclose(probabilities, np.full(SIDES, 1 / SIDES))
+
 
     def test_exact_sum_distribution_two_dice_known_probabilities():
         totals, probabilities = exact_sum_distribution(num_dice=2)
@@ -678,10 +663,12 @@ def _(
         assert np.isclose(probabilities[-1], 1 / SIDES**2)
         assert np.isclose(probabilities[SIDES - 1], 1 / SIDES)
 
+
     def test_exact_sum_distribution_probabilities_sum_to_one():
         _, probabilities = exact_sum_distribution(num_dice=4)
 
         assert np.isclose(probabilities.sum(), 1.0)
+
 
     def test_running_event_rate_uses_all_points_when_input_is_short():
         sample_sizes, running_rates = running_event_rate(
@@ -690,6 +677,7 @@ def _(
 
         assert np.array_equal(sample_sizes, np.array([1, 2, 3, 4]))
         assert np.allclose(running_rates, np.array([1.0, 0.5, 2 / 3, 0.75]))
+
 
     def test_running_event_rate_respects_requested_checkpoints():
         sample_sizes, running_rates = running_event_rate(
