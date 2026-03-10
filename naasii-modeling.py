@@ -159,10 +159,11 @@ def _():
 @app.cell(hide_code=True)
 def _(uniform_trials):
     uniform_rng = np.random.default_rng()
-    single_die_rolls = roll_d12s(uniform_rng, uniform_trials.value, num_dice=1).ravel()
+    single_die_trials = int(uniform_trials.value)
+    single_die_rolls = roll_d12s(uniform_rng, single_die_trials, num_dice=1).ravel()
     single_die_faces = np.arange(1, SIDES + 1)
     single_die_counts = np.bincount(single_die_rolls, minlength=SIDES + 1)[single_die_faces]
-    single_die_probabilities = single_die_counts / uniform_trials.value
+    single_die_probabilities = single_die_counts / single_die_trials
     exact_single_die_probability = 1 / SIDES
     single_die_max_deviation = np.abs(
         single_die_probabilities - exact_single_die_probability
@@ -396,15 +397,18 @@ def _():
 @app.cell(hide_code=True)
 def _(multi_trials, num_dice, target_sum):
     sum_rng = np.random.default_rng()
+    multi_trial_count = int(multi_trials.value)
+    dice_count = int(num_dice.value)
+    requested_target = int(target_sum.value)
     effective_target = int(
-        np.clip(target_sum.value, num_dice.value, num_dice.value * SIDES)
+        np.clip(requested_target, dice_count, dice_count * SIDES)
     )
-    rolls = roll_d12s(sum_rng, multi_trials.value, num_dice.value)
+    rolls = roll_d12s(sum_rng, multi_trial_count, dice_count)
     totals = rolls.sum(axis=1)
 
-    possible_totals, exact_probabilities = exact_sum_distribution(num_dice.value)
+    possible_totals, exact_probabilities = exact_sum_distribution(dice_count)
     simulated_counts = np.bincount(totals, minlength=possible_totals[-1] + 1)
-    simulated_probabilities = simulated_counts[possible_totals] / multi_trials.value
+    simulated_probabilities = simulated_counts[possible_totals] / multi_trial_count
 
     event_hits = totals >= effective_target
     event_sample_sizes, event_running_rates = running_event_rate(event_hits)
