@@ -54,7 +54,7 @@ def _():
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    The purpose of this notebook is to statistically model the dice game Naasii by Coyote and Crow games. This will be accomplished incrementally, starting from a single die, then multiple dice, then dice pools and so on. The basic game will also be modeled before advanced rules are added. Although modeling is at an early stage it seems most likely that the game itself will eventually be modeled with a Markov decision process.
+    This notebook uses probability, simulation, and Python to study the dice game Naasii by Coyote and Crow games. We begin with one fair d12, move to several fair d12s, and then build toward the scoreable patterns and special rules that matter in the game itself.
     """)
     return
 
@@ -112,16 +112,16 @@ def _():
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## The foundation of Naasii gameplay: the d12
+    ## How should a real d12 behave?
 
-    The most basic element of Naasii gameplay is a single twelve-sided die, called a d12.  So how do we expect each d12 to behave?  We generally assume that a die is fair, meaning each face is equally likely to come up.  For a 12-sided die, we expect to roll each number $\frac{1}{12}$, or $8\frac{1}{3}\%$ of the time.
+    The most basic element of Naasii gameplay is a single twelve-sided die, called a d12. A natural first question is: if a d12 is fair, what should its long-run behavior look like? We generally assume that a fair die gives each face the same chance to appear. For a 12-sided die, that means each number should come up with probability $\frac{1}{12}$, or $8\frac{1}{3}\%$.
 
-    For even the first, most basic steps of this exploration we'll need the results of more d12 rolls than anyone has the time to make, so we'll have to rely on the computer to simulate the dice rolls for us.  How do we convince ourselves that we can trust the simulation?  And once we are convinced that we can trust the simulated dice, how do we quanitfy that trust to communicate it to others?
+    To study that behavior, we want far more rolls than anyone would want to do by hand. So we let the computer imitate many rolls for us. This is called a **simulation**: the computer uses a random number generator to stand in for repeated dice rolls. Once we have that simulation, two more questions immediately follow. How do we decide whether the simulated d12 behaves like a believable fair die? And if it does, how do we measure how close it is to the ideal uniform model?
 
     We can do this incrementally.
-    1. First, simulate a large number of die rolls and use graphs and tables to decide if the results look like we would expect.
-    2. Find an ideal statistical distribution that models our situation and compare our results to this ideal.
-    3. Use math to put a number on our uncertainty.  What is the probability that we're wrong?
+    1. First, simulate a large number of die rolls and use graphs and tables to see whether the results look like a fair die.
+    2. Then compare those results with the exact uniform model.
+    3. Finally, use probability to measure whether the overall mismatch is small enough to be believable.
     """)
     return
 
@@ -129,7 +129,7 @@ def _():
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ### Manual inspection of d12 rolls
+    ### Do the simulated rolls look like a fair d12?
     """)
     return
 
@@ -144,7 +144,7 @@ def _():
     mo.vstack(
         [
             mo.md(
-                "Adjust the trial count for the single-die simulation, then compare the observed face frequencies to the exact uniform model. The slider uses log-spaced values so you can jump quickly between very small and very large samples."
+                "Adjust the number of simulated rolls, then compare the observed face frequencies with the exact uniform model. The slider uses log-spaced values so you can jump quickly between very small and very large samples."
             ),
             uniform_trials,
         ]
@@ -243,9 +243,9 @@ def _(
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ### Measuring the distance to our expectations: Chi-squared
+    ### How can we measure the overall mismatch?
 
-    The graph and table in the previous section show us how much more or less likely each face was in practice compared to our expectations.  We cannot just add them up because positive and negative deviations would cancel out.
+    The graph and table in the previous section show how much more or less often each face appeared than we expected. But those positive and negative differences can cancel each other out, so we need a better way to measure the total mismatch.
     """)
     return
 
@@ -253,8 +253,7 @@ def _():
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    To make the visual check more precise, we also compute Pearson's chi-squared
-    goodness-of-fit statistic
+    One standard way to measure that mismatch is **Pearson's chi-squared goodness-of-fit statistic**:
 
     \[
     \chi^2 = \sum\_{i=1}^{12} \frac{(O_i - E_i)^2}{E_i},
@@ -283,8 +282,8 @@ def _():
     \(12\) face counts, but once \(11\) of them are known, the last one is fixed because
     the counts must sum to the total number of rolls.
 
-    In a full statistics course, one often reports a p-value. This notebook uses the
-    equivalent critical-value view instead: for a 5% test, the cutoff is about
+    One common way to report this calculation is with a p-value. In this notebook we
+    use the equivalent critical-value view instead. For a 5% test, the cutoff is about
     \(19.675\). More precisely, this number is chosen so that
 
     \[
@@ -356,19 +355,20 @@ def _(
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ### Interactive chi-squared explorer
+    ### What does the chi-squared distribution measure?
 
-    The single-d12 goodness-of-fit test fixes the degrees of freedom at \(11\). Use the
-    controls below to see how the chi-squared curve and right-tail rejection region
-    change for other degrees of freedom and significance levels.
+    The single-d12 goodness-of-fit test fixes the degrees of freedom at \(11\). The
+    explorer below is a deeper look at the distribution behind that test. Use it to see
+    how the chi-squared curve and right-tail rejection region change for other degrees
+    of freedom and significance levels.
     """)
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     chi_squared_df = mo.ui.slider(
         start=1,
@@ -442,7 +442,7 @@ def _(chi_squared_alpha, chi_squared_df):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(chi_squared_alpha, chi_squared_df):
     _explorer_alpha = float(chi_squared_alpha.value)
     _explorer_df = int(chi_squared_df.value)
@@ -464,19 +464,36 @@ def _(chi_squared_alpha, chi_squared_df):
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## Exact distribution and Monte Carlo estimate
+    For the main story of the notebook, the important conclusion is simpler: a single
+    simulated d12 can be checked against the uniform model in a principled way. But
+    Naasii is a dice-pool game, so one die is only the beginning. The next question is
+    what happens when several fair d12s are rolled together.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## What totals should we expect from several fair d12s?
 
     The single-die section established the model for one fair d12: each face has
-    probability \(1/12\). The next step is to treat several dice as independent copies
-    of that same random variable and study the **sum** of their outcomes.
+    probability \(1/12\). Now we treat several dice as independent copies of that same
+    random variable and study the **sum** of their outcomes.
 
-    That changes the question in an important way:
+    This changes the question in an important way:
 
     - For one die, we care about the frequency of each face.
     - For multiple dice, we care about the distribution of the total.
 
-    The key new idea is **convolution**. In this setting, convolution is the rule for
-    combining probability distributions when we add independent random variables.
+    There are two complementary ways to study those totals. One way is exact: compute
+    the probability of every possible total. The other way is approximate: let the
+    computer generate many random samples and estimate the probabilities from those
+    samples.
+
+    The exact calculation uses **convolution**. In this setting, convolution is the
+    rule for combining probability distributions when we add independent random
+    variables.
 
     If \(X\) and \(Y\) are two independent dice, then for any total \(t\),
 
@@ -492,10 +509,13 @@ def _():
     combines it with itself to produce the two-dice distribution. Repeating that process
     gives the exact distribution for three dice, four dice, and so on.
 
+    The approximate method is often called a **Monte Carlo estimate**: we use repeated
+    random sampling to estimate probabilities numerically.
+
     For the selected number of d12s, we compute the exact distribution of the total by
-    convolving the one-die distribution with itself. Then we simulate many rolls with
-    NumPy, sum across each row of dice, and check how closely the simulation matches the
-    exact result.
+    convolving the one-die distribution with itself. Then we generate many simulated
+    rolls with NumPy, sum across each row of dice, and check how closely the simulation
+    matches the exact result.
     """)
     return
 
@@ -524,7 +544,7 @@ def _():
     mo.vstack(
         [
             mo.md(
-                "Adjust the controls for the multiple-dice model, then compare the exact total distribution to a Monte Carlo simulation. The trial slider uses log-spaced values so you can move quickly from noisy small samples to stable large ones."
+                "Adjust the controls for several fair d12s, then compare the exact total distribution with the estimate built from repeated random sampling. The trial slider uses log-spaced values so you can move quickly from noisy small samples to stable large ones."
             ),
             multi_trials,
             num_dice,
@@ -618,7 +638,7 @@ def _(
 
     mo.md(
         f"""
-        ## Read the output
+        ### What do these results tell us?
 
         With **{num_dice.value} d12s** and **{multi_trials.value:,} simulated rolls**:
 
@@ -633,6 +653,11 @@ def _(
 
         The gap between exact and simulated values should usually shrink as you increase
         the number of trials.
+
+        Totals are a useful first model for several dice because we can compute them
+        exactly and estimate them by simulation. But Naasii scoring is not based only on
+        large totals. Players score by forming patterns such as sets and runs, so the
+        next question is how often those patterns appear.
         """
     )
     return
@@ -671,20 +696,23 @@ def _(
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## Connection to Naasii
+    ## Next question: When do several d12s make a set or a run?
 
-    This notebook now demonstrates the three ingredients we will need for the game model:
+    Totals tell us something important about several fair dice, but they do not yet tell
+    us when a Naasii roll is scoreable. The next stage of the notebook should focus on
+    events such as three of a kind, longer sets, and runs of consecutive values.
+    """)
+    return
 
-    - represent die outcomes as arrays
-    - define an event and estimate its probability by simulation
-    - compare a simulation to an exact result whenever an exact result is still tractable
 
-    A natural next increment is to replace the generic `total >= target` event with a
-    Naasii event on the opening roll, such as:
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## After that: How do Naasii's special dice and values change the model?
 
-    - probability of at least one scoreable set
-    - probability of at least one scoreable run
-    - probability of any scoreable set or run
+    Once sets and runs are understood for ordinary fair d12s, the model can move closer
+    to the actual game by adding the distinctions between dice types and any special
+    values, such as a wild value.
     """)
     return
 
