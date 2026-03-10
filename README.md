@@ -12,6 +12,17 @@ Players attempt to form sets of at least three of the same number or runs of at 
 - The scoring sheet: https://coyoteandcrow.net/wp-content/uploads/2023/10/Naasii-Scorecard.pdf
 
 ## Marimo notebook
+Edit the notebook:
 ```bash
-uv run --with marimo[recommended] marimo edit naasii-modeling.py
+uv run --with marimo[recommended] marimo edit --sandbox naasii-modeling.py
+```
+
+Run it in app mode:
+```bash
+uv run --with marimo[recommended] marimo run --sandbox naasii-modeling.py
+```
+
+Run the notebook-local pytest tests:
+```bash
+uv run --with-requirements naasii-modeling.py pytest naasii-modeling.py
 ```
