@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure
-This repo centers on [naasii-modeling.py](/home/perkinsd/Naasii-modeling/naasii-modeling.py), a single Marimo notebook containing narrative cells, reactive analysis, helper functions, and notebook-local tests. [README.md](/home/perkinsd/Naasii-modeling/README.md) documents the workflow. `LICENSE` covers distribution terms. Local skills live in `.agents/skills/`; [`.claude/`](/home/perkinsd/Naasii-modeling/.claude) intentionally mirrors them for Claude. There is no `tests/`, `assets/`, or package directory.
+[naasii-modeling.py](/home/perkinsd/Naasii-modeling/naasii-modeling.py) is the single Marimo notebook, with narrative cells, reactive analysis, helper functions, and notebook-local tests. [README.md](/home/perkinsd/Naasii-modeling/README.md) documents workflow. Local skills live in `.agents/skills/`, and [`.claude/`](/home/perkinsd/Naasii-modeling/.claude) mirrors them for Claude.
 
 ## Build, Test, and Development Commands
 ```bash
@@ -11,18 +11,20 @@ uv run --with marimo[recommended] marimo check naasii-modeling.py
 uv run --with-requirements naasii-modeling.py pytest naasii-modeling.py
 python3 -m py_compile naasii-modeling.py
 ```
-Use `edit` for authoring, `run` for app-mode behavior, `check` for Marimo notebook validation, `pytest` for notebook-local tests, and `py_compile` for a fast syntax check.
+Use `edit` to author, `run` for app mode, `check` to validate, `pytest` for notebook-local tests, and `py_compile` for syntax.
 
 ## Notebook Conventions
-Target Python 3.13+ with 4-space indentation. Use `snake_case` for functions and locals and `UPPER_CASE` for constants such as `SIDES` and `TRIAL_STEPS`. Keep reusable logic in helper cells near the bottom of the notebook and pass dependencies explicitly through cell arguments. Prefer ordinary cells over `app.setup(...)`. Avoid duplicate exported names across cells, especially `fig`, `ax`, and `rng`.
+Target Python 3.13+ with 4-space indentation. Use `snake_case` for functions and locals and `UPPER_CASE` for constants such as `SIDES` and `TRIAL_STEPS`. Keep reusable logic in helper cells near the bottom and pass dependencies through cell arguments. Prefer ordinary cells over `app.setup(...)`. Avoid duplicate exported names across cells, especially `fig`, `ax`, and `rng`.
 
-Prefer built-in Marimo widgets when they fit. Ask before adding a custom widget unless the user explicitly requested one. Suggest a custom widget only when it provides a clear advantage.
+Teaching sections should be student-facing: use question-driven headings, introduce formal statistical terms in plain language before going deeper, and end larger units with a brief Naasii bridge to the next question. Narrative and UI-facing cells should usually use `hide_code=True`; show code only when it is part of the lesson.
+
+Prefer built-in Marimo widgets when they fit. Ask before adding a custom widget unless the user explicitly requested one, and suggest a custom widget only when it is clearly better.
 
 ## Testing Guidelines
-Tests live in notebook test cells, not a separate `tests/` tree. Keep test cells limited to `test_*` functions or test classes. Group related tests into one cell when that makes Marimo’s per-cell output easier to read. Favor deterministic contract tests for notebook helpers. When notebook logic changes, run the documented pytest command and manually exercise the affected sliders and plots.
+Tests live in notebook test cells, not a separate `tests/` tree. Keep them limited to `test_*` functions or test classes, and group related tests when that keeps Marimo output readable. Favor deterministic contract tests for helpers. When notebook logic changes, run the documented pytest command and manually exercise the affected sliders and plots.
 
 ## Commit and PR Guidelines
-Use short imperative sentence-case commit messages, for example `Add initial roll_d12s tests`. Pull requests should summarize notebook behavior changes, list the validation commands run, mention Marimo test results when tests changed, and include screenshots for UI or plot changes.
+Use short imperative sentence-case commit messages. Pull requests should summarize notebook behavior changes, list validation commands, mention Marimo test results when tests changed, and include screenshots for UI or plot changes.
 
 ## Skills
-Repo-local skills are the source of truth for generic framework guidance. Use `marimo-notebook` for notebook structure and reactivity questions, `wasm-compatibility` before making WASM or Pyodide claims, and `anywidget-generator` only when a custom widget is actually warranted.
+Repo-local skills are the source of truth for framework guidance. Use `marimo-notebook` for notebook structure and reactivity questions, `wasm-compatibility` before making WASM or Pyodide claims, and `anywidget-generator` only when a custom widget is warranted.
