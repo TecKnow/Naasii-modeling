@@ -109,7 +109,7 @@ def _():
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     mo.md(r"""
     ## How should a real d12 behave?
@@ -240,7 +240,7 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     mo.md(r"""
     ### How can we measure the overall mismatch?
@@ -256,7 +256,7 @@ def _():
     One standard way to measure that mismatch is **Pearson's chi-squared goodness-of-fit statistic**:
 
     \[
-    \chi^2 = \sum\_{i=1}^{12} \frac{(O_i - E_i)^2}{E_i},
+    \chi^2 = \sum_{i=1}^{12} \frac{(O_i - E_i)^2}{E_i},
     \]
 
     where \(O_i\) is the observed count for face \(i\), and \(E_i = n/12\) is the
@@ -278,7 +278,7 @@ def _():
     larger than we would usually expect from random variation alone.
 
     Under the fair-die model, this statistic is approximately distributed as
-    \(\chi^2\_{11}\). The \(11\) degrees of freedom come from the fact that there are
+    \(\chi^2_{11}\). The \(11\) degrees of freedom come from the fact that there are
     \(12\) face counts, but once \(11\) of them are known, the last one is fixed because
     the counts must sum to the total number of rolls.
 
@@ -287,16 +287,16 @@ def _():
     \(19.675\). More precisely, this number is chosen so that
 
     \[
-    P(\chi^2\_{11} \le 19.675) \approx 0.95,
+    P(\chi^2_{11} \le 19.675) \approx 0.95,
     \]
 
-    which means \(19.675\) is the 95th percentile of the \(\chi^2\_{11}\)
+    which means \(19.675\) is the 95th percentile of the \(\chi^2_{11}\)
     distribution, or equivalently the point that leaves 5% of the distribution in the
     upper tail.
 
     Historically, one would usually look this up in a chi-squared table. In modern
     practice, one often gets it from software. For example, statistics software would
-    compute the same cutoff as the inverse CDF, or quantile, of \(\chi^2\_{11}\) at
+    compute the same cutoff as the inverse CDF, or quantile, of \(\chi^2_{11}\) at
     probability \(0.95\). In this notebook we compute the cutoff directly from the
     chi-squared distribution, so the same logic can be reused for other degrees of
     freedom as well.
@@ -355,7 +355,7 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     mo.md(r"""
     ### What does the chi-squared distribution measure?
@@ -368,7 +368,7 @@ def _():
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     chi_squared_df = mo.ui.slider(
         start=1,
@@ -442,7 +442,7 @@ def _(chi_squared_alpha, chi_squared_df):
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(chi_squared_alpha, chi_squared_df):
     _explorer_alpha = float(chi_squared_alpha.value)
     _explorer_df = int(chi_squared_df.value)
