@@ -5,6 +5,7 @@
 #     "matplotlib==3.10.8",
 #     "numpy==2.4.3",
 #     "pytest==9.0.2",
+#     "scipy==1.17.1",
 # ]
 # ///
 
@@ -13,11 +14,12 @@ import marimo
 __generated_with = "0.20.4"
 app = marimo.App(width="medium")
 
-with app.setup:
+with app.setup(hide_code=True):
     # Initialization code that runs before all other cells
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
+    import scipy
 
     SIDES = 12
 
@@ -49,7 +51,7 @@ def _():
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     mo.md(r"""
     The purpose of this notebook is to statistically model the dice game Naasii by Coyote and Crow games. This will be accomplished incrementally, starting from a single die, then multiple dice, then dice pools and so on. The basic game will also be modeled before advanced rules are added. Although modeling is at an early stage it seems most likely that the game itself will eventually be modeled with a Markov decision process.
@@ -81,7 +83,7 @@ def _():
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     mo.md(r"""
     ## Interacting with this notebook
@@ -110,18 +112,16 @@ def _():
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## Why start here?
+    ## The foundation of Naasii gameplay: the d12
 
-    Naasii uses twelve-sided dice, so the examples below use fair d12s. The goal of
-    this first pass is not to model the game rules yet. It is to verify the notebook
-    workflow and build intuition for:
+    The most basic element of Naasii gameplay is a single twelve-sided die, called a d12.  So how do we expect each d12 to behave?  We generally assume that a die is fair, meaning each face is equally likely to come up.  For a 12-sided die, we expect to roll each number $\frac{1}{12}$, or $8\frac{1}{3}\%$ of the time.
 
-    - exact probability vs simulated probability
-    - how sample size affects stability
-    - how to define events that we will later reuse for Naasii decisions
+    For even the first, most basic steps of this exploration we'll need the results of more d12 rolls than anyone has the time to make, so we'll have to rely on the computer to simulate the dice rolls for us.  How do we convince ourselves that we can trust the simulation?  And once we are convinced that we can trust the simulated dice, how do we quanitfy that trust to communicate it to others?
 
-    Later increments can replace these generic events with Naasii-specific ones such
-    as making a set, making a run, or surviving Crow dice.
+    We can do this incrementally.
+    1. First, simulate a large number of die rolls and use graphs and tables to decide if the results look like we would expect.
+    2. Find an ideal statistical distribution that models our situation and compare our results to this ideal.
+    3. Use math to put a number on our uncertainty.  What is the probability that we're wrong?
     """)
     return
 
@@ -129,11 +129,7 @@ def _():
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## Uniformity check for one d12
-
-    Before summing multiple dice, verify the base ingredient: a fair twelve-sided die.
-    We simulate many single-die rolls and compare the observed face frequencies to the
-    exact probability of **1/12** for each face.
+    ### Manual inspection of d12 rolls
     """)
     return
 
@@ -158,9 +154,13 @@ def _():
 
 @app.cell(hide_code=True)
 def _(uniform_trials):
-    uniform_rng = np.random.default_rng()
     single_die_trials = int(uniform_trials.value)
-    single_die_rolls = roll_d12s(uniform_rng, single_die_trials, num_dice=1).ravel()
+    single_die_rolls = roll_d12s(single_die_trials, num_dice=1).ravel()
+    return single_die_rolls, single_die_trials
+
+
+@app.cell(hide_code=True)
+def _(single_die_rolls, single_die_trials):
     single_die_faces = np.arange(1, SIDES + 1)
     single_die_counts = np.bincount(single_die_rolls, minlength=SIDES + 1)[single_die_faces]
     single_die_probabilities = single_die_counts / single_die_trials
@@ -171,7 +171,7 @@ def _(uniform_trials):
     single_die_chi_square, single_die_expected_count, single_die_df = (
         chi_squared_uniformity(single_die_counts)
     )
-    single_die_critical_value = 19.675
+    single_die_critical_value = chi_squared_critical_value(single_die_df)
     single_die_uniformity_passes = single_die_chi_square <= single_die_critical_value
     return (
         exact_single_die_probability,
@@ -213,6 +213,40 @@ def _(
     uniform_ax.grid(axis="y", alpha=0.2)
     uniform_fig.tight_layout()
     uniform_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    exact_single_die_probability,
+    single_die_faces,
+    single_die_probabilities,
+):
+    uniformity_rows = "\n".join(
+        f"| {int(face)} | {probability:.3%} | {probability - exact_single_die_probability:+.3%} |"
+        for face, probability in zip(single_die_faces, single_die_probabilities)
+    )
+    mo.md(
+        "\n".join(
+            [
+                "Measured frequencies by face compared with the exact uniform model:",
+                "",
+                "| Face | Measured frequency | Difference from expected (1/12) |",
+                "| --- | ---: | ---: |",
+                uniformity_rows,
+            ]
+        )
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Measuring the distance to our expectations: Chi-squared
+
+    The graph and table in the previous section show us how much more or less likely each face was in practice compared to our expectations.  We cannot just add them up because positive and negative deviations would cancel out.
+    """)
     return
 
 
@@ -264,8 +298,9 @@ def _():
     Historically, one would usually look this up in a chi-squared table. In modern
     practice, one often gets it from software. For example, statistics software would
     compute the same cutoff as the inverse CDF, or quantile, of \(\chi^2\_{11}\) at
-    probability \(0.95\). In this notebook the value is hard-coded because the number of
-    faces is fixed, so the degrees of freedom are fixed at \(11\).
+    probability \(0.95\). In this notebook we compute the cutoff directly from the
+    chi-squared distribution, so the same logic can be reused for other degrees of
+    freedom as well.
 
     - If \(\chi^2 \le 19.675\), the sample is considered consistent with a fair d12 at
       the 5% level.
@@ -318,6 +353,111 @@ def _(
         should flatten toward a uniform distribution.
         """
     )
+    return
+
+
+@app.cell
+def _():
+    mo.md(r"""
+    ### Interactive chi-squared explorer
+
+    The single-d12 goodness-of-fit test fixes the degrees of freedom at \(11\). Use the
+    controls below to see how the chi-squared curve and right-tail rejection region
+    change for other degrees of freedom and significance levels.
+    """)
+    return
+
+
+@app.cell
+def _():
+    chi_squared_df = mo.ui.slider(
+        start=1,
+        stop=30,
+        step=1,
+        value=11,
+        show_value=True,
+        label="Degrees of freedom",
+    )
+    chi_squared_alpha = mo.ui.dropdown(
+        options={"10%": 0.10, "5%": 0.05, "1%": 0.01},
+        value="5%",
+        label="Significance level",
+    )
+    mo.vstack(
+        [
+            chi_squared_df,
+            chi_squared_alpha,
+        ]
+    )
+    return chi_squared_alpha, chi_squared_df
+
+
+@app.cell(hide_code=True)
+def _(chi_squared_alpha, chi_squared_df):
+    _explorer_alpha = float(chi_squared_alpha.value)
+    _explorer_df = int(chi_squared_df.value)
+    _explorer_critical_value = chi_squared_critical_value(
+        _explorer_df, alpha=_explorer_alpha
+    )
+    _explorer_x_max = max(
+        float(scipy.stats.chi2.ppf(0.999, df=_explorer_df)),
+        _explorer_critical_value * 1.1,
+    )
+    _explorer_x = np.linspace(0.0, _explorer_x_max, num=600)
+    _explorer_pdf = scipy.stats.chi2.pdf(_explorer_x, df=_explorer_df)
+    _explorer_pdf[~np.isfinite(_explorer_pdf)] = np.nan
+
+    _explorer_fig, _explorer_ax = plt.subplots(figsize=(10, 4))
+    _explorer_ax.plot(
+        _explorer_x,
+        _explorer_pdf,
+        color="tab:blue",
+        label=f"$\\chi^2_{{{_explorer_df}}}$ density",
+    )
+    _explorer_ax.axvline(
+        _explorer_critical_value,
+        color="tab:red",
+        linestyle="--",
+        label=f"Critical value = {_explorer_critical_value:.3f}",
+    )
+    _explorer_ax.fill_between(
+        _explorer_x,
+        0,
+        _explorer_pdf,
+        where=_explorer_x >= _explorer_critical_value,
+        color="tab:red",
+        alpha=0.25,
+        label=f"Right-tail area = {_explorer_alpha:.0%}",
+    )
+    _explorer_ax.set_xlim(0, _explorer_x_max)
+    _explorer_ax.set_title(
+        f"Chi-squared density with {_explorer_df} degrees of freedom"
+    )
+    _explorer_ax.set_xlabel("Chi-squared value")
+    _explorer_ax.set_ylabel("Density")
+    _explorer_ax.grid(axis="y", alpha=0.2)
+    _explorer_ax.legend()
+    _explorer_fig.tight_layout()
+    _explorer_fig
+    return
+
+
+@app.cell
+def _(chi_squared_alpha, chi_squared_df):
+    _explorer_alpha = float(chi_squared_alpha.value)
+    _explorer_df = int(chi_squared_df.value)
+    _explorer_critical_value = chi_squared_critical_value(
+        _explorer_df, alpha=_explorer_alpha
+    )
+    mo.md(f"""
+    With **{_explorer_df}** degrees of freedom and significance level
+    **{_explorer_alpha:.0%}**, the right-tail critical value is
+    **{_explorer_critical_value:.3f}**.
+
+    The shaded region marks the rejection tail: values to the right of the cutoff
+    have total probability **{_explorer_alpha:.0%}** under the selected
+    chi-squared model.
+    """)
     return
 
 
@@ -396,14 +536,13 @@ def _():
 
 @app.cell(hide_code=True)
 def _(multi_trials, num_dice, target_sum):
-    sum_rng = np.random.default_rng()
     multi_trial_count = int(multi_trials.value)
     dice_count = int(num_dice.value)
     requested_target = int(target_sum.value)
     effective_target = int(
         np.clip(requested_target, dice_count, dice_count * SIDES)
     )
-    rolls = roll_d12s(sum_rng, multi_trial_count, dice_count)
+    rolls = roll_d12s(multi_trial_count, dice_count)
     totals = rolls.sum(axis=1)
 
     possible_totals, exact_probabilities = exact_sum_distribution(dice_count)
@@ -551,8 +690,12 @@ def _():
 
 
 @app.function
-def roll_d12s(rng: np.random.Generator, trials: int, num_dice: int) -> np.ndarray:
+def roll_d12s(
+    trials: int, num_dice: int, rng: np.random.Generator | None = None
+) -> np.ndarray:
     """Return a trials-by-num_dice array of simulated d12 rolls."""
+    if rng is None:
+        rng = np.random.default_rng()
     return rng.integers(1, SIDES, size=(trials, num_dice), endpoint=True)
 
 
@@ -566,6 +709,12 @@ def chi_squared_uniformity(observed_counts: np.ndarray) -> tuple[float, float, i
     chi_square = np.sum((observed_counts - expected_count) ** 2 / expected_count)
     degrees_freedom = observed_counts.size - 1
     return float(chi_square), float(expected_count), int(degrees_freedom)
+
+
+@app.function
+def chi_squared_critical_value(degrees_freedom: int, alpha: float = 0.05) -> float:
+    """Return the right-tail critical value for a chi-squared test."""
+    return float(scipy.stats.chi2.ppf(1 - alpha, df=degrees_freedom))
 
 
 @app.function(hide_code=True)
@@ -598,14 +747,14 @@ def running_event_rate(
 def _():
     def test_roll_d12s_shape():
         rng = np.random.default_rng(7)
-        rolls = roll_d12s(rng, trials=7, num_dice=3)
+        rolls = roll_d12s(trials=7, num_dice=3, rng=rng)
 
         assert rolls.shape == (7, 3)
 
 
     def test_roll_d12s_integer_bounds():
         rng = np.random.default_rng(17)
-        rolls = roll_d12s(rng, trials=200, num_dice=4)
+        rolls = roll_d12s(trials=200, num_dice=4, rng=rng)
 
         assert np.issubdtype(rolls.dtype, np.integer)
         assert rolls.min() >= 1
@@ -616,9 +765,23 @@ def _():
         rng_a = np.random.default_rng(23)
         rng_b = np.random.default_rng(23)
 
-        rolls_a = roll_d12s(rng_a, trials=25, num_dice=2)
-        rolls_b = roll_d12s(rng_b, trials=25, num_dice=2)
+        rolls_a = roll_d12s(trials=25, num_dice=2, rng=rng_a)
+        rolls_b = roll_d12s(trials=25, num_dice=2, rng=rng_b)
 
+        assert np.array_equal(rolls_a, rolls_b)
+
+
+    def test_roll_d12s_default_rng_created_per_call():
+        from unittest.mock import patch
+
+        rng_a = np.random.default_rng(31)
+        rng_b = np.random.default_rng(31)
+
+        with patch.object(np.random, "default_rng", side_effect=[rng_a, rng_b]) as default_rng:
+            rolls_a = roll_d12s(trials=25, num_dice=2)
+            rolls_b = roll_d12s(trials=25, num_dice=2)
+
+        assert default_rng.call_count == 2
         assert np.array_equal(rolls_a, rolls_b)
 
 
@@ -649,6 +812,19 @@ def _():
             assert str(exc) == "observed_counts must be one-dimensional"
         else:
             assert False, "Expected ValueError for non-1D observed_counts"
+
+
+    def test_chi_squared_critical_value_matches_known_cutoff():
+        critical_value = chi_squared_critical_value(11, alpha=0.05)
+
+        assert np.isclose(critical_value, 19.675, atol=0.001)
+
+
+    def test_chi_squared_critical_value_changes_with_alpha():
+        strict_cutoff = chi_squared_critical_value(11, alpha=0.01)
+        loose_cutoff = chi_squared_critical_value(11, alpha=0.10)
+
+        assert strict_cutoff > loose_cutoff
 
 
     def test_exact_sum_distribution_single_die_is_uniform():

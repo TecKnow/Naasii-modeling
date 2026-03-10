@@ -7,10 +7,11 @@ This repo centers on [naasii-modeling.py](/home/perkinsd/Naasii-modeling/naasii-
 ```bash
 uv run --with marimo[recommended] marimo edit --sandbox naasii-modeling.py
 uv run --with marimo[recommended] marimo run --sandbox naasii-modeling.py
+uv run --with marimo[recommended] marimo check naasii-modeling.py
 uv run --with-requirements naasii-modeling.py pytest naasii-modeling.py
 python3 -m py_compile naasii-modeling.py
 ```
-Use `edit` for authoring, `run` for app-mode behavior, `pytest` for notebook-local tests, and `py_compile` for a fast syntax check.
+Use `edit` for authoring, `run` for app-mode behavior, `check` for Marimo notebook validation, `pytest` for notebook-local tests, and `py_compile` for a fast syntax check.
 
 ## Notebook Conventions
 Target Python 3.13+ with 4-space indentation. Use `snake_case` for functions and locals and `UPPER_CASE` for constants such as `SIDES` and `TRIAL_STEPS`. Keep reusable logic in helper cells near the bottom of the notebook and pass dependencies explicitly through cell arguments. Prefer ordinary cells over `app.setup(...)`. Avoid duplicate exported names across cells, especially `fig`, `ax`, and `rng`.
