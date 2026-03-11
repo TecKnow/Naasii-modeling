@@ -793,7 +793,13 @@ def _(set_num_dice):
 
 
 @app.cell(hide_code=True)
-def _(scoreable_set_size, set_match_mode, set_num_dice, set_target_face, set_trials):
+def _(
+    scoreable_set_size,
+    set_match_mode,
+    set_num_dice,
+    set_target_face,
+    set_trials,
+):
     mo.vstack(
         [
             mo.md(
@@ -810,7 +816,13 @@ def _(scoreable_set_size, set_match_mode, set_num_dice, set_target_face, set_tri
 
 
 @app.cell(hide_code=True)
-def _(scoreable_set_size, set_match_mode, set_num_dice, set_target_face, set_trials):
+def _(
+    scoreable_set_size,
+    set_match_mode,
+    set_num_dice,
+    set_target_face,
+    set_trials,
+):
     set_dice_count_value = int(set_num_dice.value)
     set_size_value = int(scoreable_set_size.value)
     set_target_face_value = int(set_target_face.value)
@@ -882,7 +894,6 @@ def _(scoreable_set_size, set_match_mode, set_num_dice, set_target_face, set_tri
         chosen_face_exact_probabilities,
         chosen_face_exact_probability,
         chosen_face_favorable_outcomes,
-        chosen_face_outcome_counts,
         chosen_face_probability_formula,
         chosen_face_simulated_probabilities,
         chosen_face_simulated_probability,
@@ -1366,7 +1377,7 @@ def particular_face_count_distribution(
 
 
 @app.function(hide_code=True)
-def _iterate_face_count_vectors(num_dice: int, sides: int = SIDES):
+def iterate_face_count_vectors(num_dice: int, sides: int = SIDES):
     """Yield labeled face-count vectors whose entries sum to num_dice."""
     if num_dice < 0:
         raise ValueError("num_dice must be nonnegative")
@@ -1404,7 +1415,7 @@ def largest_set_size_distribution(
     total_permutations = factorials[num_dice]
     largest_size_outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
 
-    for count_vector in _iterate_face_count_vectors(num_dice, sides):
+    for count_vector in iterate_face_count_vectors(num_dice, sides):
         outcome_count = total_permutations
         for count in count_vector:
             outcome_count //= factorials[count]
@@ -1452,7 +1463,7 @@ def exact_any_face_match_probability(
     total_permutations = factorials[num_dice]
     favorable_outcomes = 0
 
-    for count_vector in _iterate_face_count_vectors(num_dice, sides):
+    for count_vector in iterate_face_count_vectors(num_dice, sides):
         if match_mode == "exactly":
             event_holds = set_size in count_vector
         else:
@@ -1508,7 +1519,17 @@ def _():
             hits += int(event_holds)
         return hits / SIDES**num_dice
 
+    return (
+        brute_force_any_face_match_probability,
+        brute_force_largest_set_size_distribution,
+    )
 
+
+@app.cell
+def _(
+    brute_force_any_face_match_probability,
+    brute_force_largest_set_size_distribution,
+):
     def test_roll_d12s_shape():
         rng = np.random.default_rng(7)
         rolls = roll_d12s(trials=7, num_dice=3, rng=rng)
