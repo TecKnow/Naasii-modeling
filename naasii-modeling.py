@@ -16,6 +16,7 @@ app = marimo.App(width="medium")
 
 with app.setup(hide_code=True):
     # Initialization code that runs before all other cells
+    import math
     import marimo as mo
     import matplotlib.pyplot as plt
     import numpy as np
@@ -696,12 +697,588 @@ def _(
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## Next question: When do several d12s make a set or a run?
+    ## When do several d12s make a scoreable set?
 
-    Totals tell us something important about several fair dice, but they do not yet tell
-    us when a Naasii roll is scoreable. The next stage of the notebook should focus on
-    events such as three of a kind, longer sets, and runs of consecutive values.
+    In Naasii, a set becomes scoreable at three of a kind. Larger sets are better
+    because a set is worth its size: a 3-set is worth 3 points, a 4-set is worth 4
+    points, and so on.
+
+    That makes sets a natural place to introduce **counting** in probability. We first
+    ask about one chosen face, such as "How likely is it that 7 appears at least three
+    times?" Then we generalize to the harder question "How likely is it that some face
+    appears at least three times?"
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### What does counting mean in probability?
+
+    When all \(12^n\) ordered outcomes of \(n\) fair d12s are equally likely, an event
+    probability can be written as
+
+    \[
+    P(E) = \frac{\#\text{ favorable outcomes}}{\#\text{ total outcomes}}.
+    \]
+
+    For one chosen face and a fixed set size \(k\), the counting steps are simple:
+    choose which \(k\) dice show that face, then let the remaining dice show any of the
+    other \(11\) faces.
+
+    That gives
+
+    \[
+    P(\text{chosen face appears exactly } k \text{ times})
+    = \binom{n}{k}\left(\frac{1}{12}\right)^k\left(\frac{11}{12}\right)^{n-k}.
+    \]
+
+    If we want "at least \(k\)" instead of "exactly \(k\)," we add the probabilities
+    for \(k, k+1, \dots, n\).
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### How likely is one particular set?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    set_trials = mo.ui.slider(
+        steps=TRIAL_STEPS,
+        value=20_000,
+        label="Set simulation trials",
+    )
+    set_num_dice = mo.ui.slider(
+        start=3,
+        stop=9,
+        step=1,
+        value=5,
+        label="Number of d12s",
+    )
+    set_target_face = mo.ui.slider(
+        start=1,
+        stop=SIDES,
+        step=1,
+        value=7,
+        label="Chosen face",
+    )
+    set_match_mode = mo.ui.dropdown(
+        options={
+            "At least k copies": "at_least",
+            "Exactly k copies": "exactly",
+        },
+        value="At least k copies",
+        label="Chosen-face event",
+    )
+    return set_match_mode, set_num_dice, set_target_face, set_trials
+
+
+@app.cell(hide_code=True)
+def _(set_num_dice):
+    scoreable_set_size = mo.ui.slider(
+        start=3,
+        stop=int(set_num_dice.value),
+        step=1,
+        value=3,
+        label="Set size k",
+    )
+    return (scoreable_set_size,)
+
+
+@app.cell(hide_code=True)
+def _(scoreable_set_size, set_match_mode, set_num_dice, set_target_face, set_trials):
+    mo.vstack(
+        [
+            mo.md(
+                "Use these controls to compare one chosen face with the event that some face forms a set. A 3-set is the first scoreable set in Naasii; larger sets are rarer, but they are worth more because a set scores its size."
+            ),
+            set_trials,
+            set_num_dice,
+            scoreable_set_size,
+            set_target_face,
+            set_match_mode,
+        ]
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(scoreable_set_size, set_match_mode, set_num_dice, set_target_face, set_trials):
+    set_dice_count_value = int(set_num_dice.value)
+    set_size_value = int(scoreable_set_size.value)
+    set_target_face_value = int(set_target_face.value)
+    set_trial_count = int(set_trials.value)
+    set_match_mode_value = str(set_match_mode.value)
+    set_match_mode_text = "at least" if set_match_mode_value == "at_least" else "exactly"
+
+    set_rolls = roll_d12s(set_trial_count, set_dice_count_value)
+    chosen_face_count_values, chosen_face_exact_probabilities = (
+        particular_face_count_distribution(set_dice_count_value)
+    )
+    chosen_face_outcome_counts = np.array(
+        [
+            math.comb(set_dice_count_value, int(count))
+            * (SIDES - 1) ** (set_dice_count_value - int(count))
+            for count in chosen_face_count_values
+        ],
+        dtype=np.int64,
+    )
+    chosen_face_counts = np.count_nonzero(set_rolls == set_target_face_value, axis=1)
+    chosen_face_simulated_probabilities = (
+        np.bincount(chosen_face_counts, minlength=set_dice_count_value + 1)
+        / set_trial_count
+    )
+
+    if set_match_mode_value == "exactly":
+        chosen_face_event_mask = chosen_face_count_values == set_size_value
+        chosen_face_count_formula = (
+            rf"\binom{{{set_dice_count_value}}}{{{set_size_value}}}"
+            rf" 11^{{{set_dice_count_value - set_size_value}}}"
+        )
+        chosen_face_probability_formula = (
+            rf"\binom{{{set_dice_count_value}}}{{{set_size_value}}}"
+            rf"\left(\frac{{1}}{{12}}\right)^{{{set_size_value}}}"
+            rf"\left(\frac{{11}}{{12}}\right)^{{{set_dice_count_value - set_size_value}}}"
+        )
+    else:
+        chosen_face_event_mask = chosen_face_count_values >= set_size_value
+        chosen_face_count_formula = (
+            rf"\sum_{{j={set_size_value}}}^{{{set_dice_count_value}}}"
+            rf"\binom{{{set_dice_count_value}}}{{j}} 11^{{{set_dice_count_value}-j}}"
+        )
+        chosen_face_probability_formula = (
+            rf"\sum_{{j={set_size_value}}}^{{{set_dice_count_value}}}"
+            rf"\binom{{{set_dice_count_value}}}{{j}}"
+            rf"\left(\frac{{1}}{{12}}\right)^{{j}}"
+            rf"\left(\frac{{11}}{{12}}\right)^{{{set_dice_count_value}-j}}"
+        )
+
+    chosen_face_exact_probability = float(
+        chosen_face_exact_probabilities[chosen_face_event_mask].sum()
+    )
+    chosen_face_simulated_probability = float(
+        chosen_face_simulated_probabilities[chosen_face_event_mask].sum()
+    )
+    chosen_face_favorable_outcomes = int(
+        chosen_face_outcome_counts[chosen_face_event_mask].sum()
+    )
+    chosen_face_event_label = (
+        f"Face {set_target_face_value} appears {set_match_mode_text} "
+        f"{set_size_value} times"
+    )
+    total_ordered_outcomes = int(SIDES**set_dice_count_value)
+    return (
+        chosen_face_count_formula,
+        chosen_face_count_values,
+        chosen_face_event_label,
+        chosen_face_event_mask,
+        chosen_face_exact_probabilities,
+        chosen_face_exact_probability,
+        chosen_face_favorable_outcomes,
+        chosen_face_outcome_counts,
+        chosen_face_probability_formula,
+        chosen_face_simulated_probabilities,
+        chosen_face_simulated_probability,
+        set_dice_count_value,
+        set_match_mode_text,
+        set_match_mode_value,
+        set_rolls,
+        set_size_value,
+        set_target_face_value,
+        set_trial_count,
+        total_ordered_outcomes,
+    )
+
+
+@app.cell(hide_code=True)
+def _(
+    chosen_face_exact_probability,
+    set_dice_count_value,
+    set_match_mode_text,
+    set_match_mode_value,
+    set_rolls,
+    set_size_value,
+):
+    set_face_count_matrix = (set_rolls[:, :, None] == np.arange(1, SIDES + 1)).sum(axis=1)
+    simulated_largest_set_sizes = set_face_count_matrix.max(axis=1)
+    largest_set_sizes, largest_set_exact_probabilities = largest_set_size_distribution(
+        set_dice_count_value
+    )
+    largest_set_simulated_probabilities = (
+        np.bincount(simulated_largest_set_sizes, minlength=set_dice_count_value + 1)[
+            largest_set_sizes
+        ]
+        / set_rolls.shape[0]
+    )
+
+    if set_match_mode_value == "exactly":
+        any_face_event_hits = (set_face_count_matrix == set_size_value).any(axis=1)
+    else:
+        any_face_event_hits = simulated_largest_set_sizes >= set_size_value
+
+    any_face_event_label = (
+        f"Some face appears {set_match_mode_text} {set_size_value} times"
+    )
+    any_face_exact_probability = exact_any_face_match_probability(
+        set_dice_count_value,
+        set_size_value,
+        match_mode=set_match_mode_value,
+    )
+    any_face_naive_probability = float(SIDES * chosen_face_exact_probability)
+    any_face_overlap_gap = float(
+        any_face_naive_probability - any_face_exact_probability
+    )
+    any_face_simulated_probability = float(any_face_event_hits.mean())
+    any_face_sample_sizes, any_face_running_rates = running_event_rate(any_face_event_hits)
+
+    exact_scoreable_set_probability = exact_any_set_probability(
+        set_dice_count_value, min_size=3
+    )
+    exact_selected_threshold_probability = exact_any_set_probability(
+        set_dice_count_value, min_size=set_size_value
+    )
+    simulated_scoreable_set_probability = float(
+        (simulated_largest_set_sizes >= 3).mean()
+    )
+    simulated_selected_threshold_probability = float(
+        (simulated_largest_set_sizes >= set_size_value).mean()
+    )
+    return (
+        any_face_event_label,
+        any_face_exact_probability,
+        any_face_naive_probability,
+        any_face_overlap_gap,
+        any_face_running_rates,
+        any_face_sample_sizes,
+        any_face_simulated_probability,
+        exact_scoreable_set_probability,
+        exact_selected_threshold_probability,
+        largest_set_exact_probabilities,
+        largest_set_simulated_probabilities,
+        largest_set_sizes,
+        simulated_scoreable_set_probability,
+        simulated_selected_threshold_probability,
+    )
+
+
+@app.cell(hide_code=True)
+def _(
+    chosen_face_count_values,
+    chosen_face_event_label,
+    chosen_face_event_mask,
+    chosen_face_exact_probabilities,
+    chosen_face_simulated_probabilities,
+    set_dice_count_value,
+    set_target_face_value,
+):
+    chosen_set_fig, chosen_set_ax = plt.subplots(figsize=(10, 4.5))
+    chosen_set_ax.bar(
+        chosen_face_count_values,
+        chosen_face_exact_probabilities,
+        width=0.7,
+        alpha=0.75,
+        color="tab:blue",
+        label="Exact probability",
+    )
+    chosen_set_ax.bar(
+        chosen_face_count_values[chosen_face_event_mask],
+        chosen_face_exact_probabilities[chosen_face_event_mask],
+        width=0.7,
+        color="tab:orange",
+        label=chosen_face_event_label,
+    )
+    chosen_set_ax.scatter(
+        chosen_face_count_values,
+        chosen_face_simulated_probabilities,
+        color="black",
+        zorder=3,
+        label="Simulated frequency",
+    )
+    chosen_set_ax.set_title(
+        f"How many times does face {set_target_face_value} appear among {set_dice_count_value} d12s?"
+    )
+    chosen_set_ax.set_xlabel(f"Copies of face {set_target_face_value}")
+    chosen_set_ax.set_ylabel("Probability")
+    chosen_set_ax.set_xticks(chosen_face_count_values)
+    chosen_set_ax.grid(axis="y", alpha=0.2)
+    chosen_set_ax.legend()
+    chosen_set_fig.tight_layout()
+    chosen_set_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    chosen_face_count_formula,
+    chosen_face_event_label,
+    chosen_face_exact_probability,
+    chosen_face_favorable_outcomes,
+    chosen_face_probability_formula,
+    chosen_face_simulated_probability,
+    set_trial_count,
+    total_ordered_outcomes,
+):
+    mo.md(
+        "\n".join(
+            [
+                f"Counting the event **{chosen_face_event_label.lower()}**:",
+                "",
+                "| Quantity | Value |",
+                "| --- | ---: |",
+                f"| Total ordered outcomes | $12^n = {total_ordered_outcomes:,}$ |",
+                f"| Favorable ordered outcomes | ${chosen_face_count_formula} = {chosen_face_favorable_outcomes:,}$ |",
+                f"| Exact probability formula | ${chosen_face_probability_formula}$ |",
+                f"| Exact probability | **{chosen_face_exact_probability:.3%}** |",
+                f"| Simulated estimate from {set_trial_count:,} rolls | **{chosen_face_simulated_probability:.3%}** |",
+            ]
+        )
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Why can't we just multiply by 12?
+
+    To generalize from one chosen face to "some face," the first instinct is often to
+    multiply by \(12\). That is a useful starting point, but it only works when the
+    face-specific events are disjoint.
+
+    Once a roll can satisfy the event for more than one face at the same time, simple
+    multiplication overcounts. The exact calculation has to count face-frequency
+    patterns instead: for each vector \((c_1, \dots, c_{12})\) with
+    \(c_1 + \cdots + c_{12} = n\), the ordered outcomes contribute
+
+    \[
+    \frac{n!}{c_1!c_2!\cdots c_{12}!}
+    \]
+
+    sequences, and we keep only the vectors that make the event true.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### How likely is any face to make the set?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    any_face_event_label,
+    any_face_exact_probability,
+    any_face_naive_probability,
+    any_face_overlap_gap,
+    any_face_simulated_probability,
+    chosen_face_event_label,
+):
+    overcount_note = (
+        "For this selection, multiplying by 12 happens to be exact because the 12 "
+        "face-specific events are disjoint."
+    )
+    if not np.isclose(any_face_overlap_gap, 0.0):
+        overcount_note = (
+            "Here multiplying by 12 overcounts because one roll can make more than one "
+            "face-specific event true at once."
+        )
+
+    mo.md(
+        "\n".join(
+            [
+                f"Comparing **{chosen_face_event_label.lower()}** with **{any_face_event_label.lower()}**:",
+                "",
+                "| Quantity | Value |",
+                "| --- | ---: |",
+                f"| Naive multiplier $12 \\times P(\\text{{chosen face event}})$ | **{any_face_naive_probability:.3%}** |",
+                f"| Exact probability of {any_face_event_label.lower()} | **{any_face_exact_probability:.3%}** |",
+                f"| Simulated estimate of {any_face_event_label.lower()} | **{any_face_simulated_probability:.3%}** |",
+                f"| Overcount gap | **{any_face_overlap_gap:.3%}** |",
+                "",
+                overcount_note,
+            ]
+        )
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    any_face_event_label,
+    any_face_exact_probability,
+    any_face_running_rates,
+    any_face_sample_sizes,
+):
+    any_set_conv_fig, any_set_conv_ax = plt.subplots(figsize=(10, 4))
+    any_set_conv_ax.plot(
+        any_face_sample_sizes,
+        any_face_running_rates,
+        linewidth=2,
+        label="Running simulated estimate",
+    )
+    any_set_conv_ax.axhline(
+        any_face_exact_probability,
+        color="black",
+        linestyle="--",
+        label="Exact probability",
+    )
+    any_set_conv_ax.set_title(f"Simulation converges for {any_face_event_label.lower()}")
+    any_set_conv_ax.set_xlabel("Number of simulated rolls used")
+    any_set_conv_ax.set_ylabel("Probability")
+    any_set_conv_ax.grid(alpha=0.2)
+    any_set_conv_ax.legend()
+    any_set_conv_fig.tight_layout()
+    any_set_conv_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### How often do we make a 3-set, 4-set, or better?
+
+    For Naasii, the key scoring summary is the size of the largest set on the roll. A
+    largest set of size \(1\) or \(2\) is not scoreable. A largest set of size \(3\) is
+    the first scoreable case, and larger values mean rarer but better-scoring sets.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    largest_set_exact_probabilities,
+    largest_set_simulated_probabilities,
+    largest_set_sizes,
+):
+    scoreable_mask = largest_set_sizes >= 3
+    largest_set_fig, largest_set_ax = plt.subplots(figsize=(10, 4.5))
+    largest_set_ax.axvspan(0.5, 2.5, color="tab:gray", alpha=0.08)
+    largest_set_ax.axvspan(2.5, largest_set_sizes[-1] + 0.5, color="tab:orange", alpha=0.06)
+    largest_set_ax.bar(
+        largest_set_sizes[~scoreable_mask],
+        largest_set_exact_probabilities[~scoreable_mask],
+        width=0.7,
+        color="tab:gray",
+        alpha=0.85,
+        label="Exact probability (not scoreable)",
+    )
+    largest_set_ax.bar(
+        largest_set_sizes[scoreable_mask],
+        largest_set_exact_probabilities[scoreable_mask],
+        width=0.7,
+        color="tab:orange",
+        alpha=0.85,
+        label="Exact probability (scoreable)",
+    )
+    largest_set_ax.scatter(
+        largest_set_sizes,
+        largest_set_simulated_probabilities,
+        color="black",
+        zorder=3,
+        label="Simulated frequency",
+    )
+    largest_set_ax.axvline(2.5, color="black", linestyle="--", linewidth=1)
+    largest_set_ax.set_title("Distribution of the largest set size on the roll")
+    largest_set_ax.set_xlabel("Largest set size")
+    largest_set_ax.set_ylabel("Probability")
+    largest_set_ax.set_xticks(largest_set_sizes)
+    largest_set_ax.grid(axis="y", alpha=0.2)
+    largest_set_ax.legend()
+    largest_set_fig.tight_layout()
+    largest_set_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    exact_scoreable_set_probability,
+    exact_selected_threshold_probability,
+    largest_set_exact_probabilities,
+    largest_set_simulated_probabilities,
+    largest_set_sizes,
+    set_dice_count_value,
+    set_size_value,
+    simulated_scoreable_set_probability,
+    simulated_selected_threshold_probability,
+):
+    no_scoreable_exact_probability = float(
+        largest_set_exact_probabilities[largest_set_sizes < 3].sum()
+    )
+    no_scoreable_simulated_probability = float(
+        largest_set_simulated_probabilities[largest_set_sizes < 3].sum()
+    )
+    score_rows = [
+        "| Outcome | Exact probability | Simulated probability | Naasii meaning |",
+        "| --- | ---: | ---: | --- |",
+        (
+            f"| No scoreable set (largest set at most 2) | "
+            f"{no_scoreable_exact_probability:.3%} | "
+            f"{no_scoreable_simulated_probability:.3%} | "
+            "No set score |"
+        ),
+    ]
+    for largest_size, exact_probability, simulated_probability in zip(
+        largest_set_sizes[largest_set_sizes >= 3],
+        largest_set_exact_probabilities[largest_set_sizes >= 3],
+        largest_set_simulated_probabilities[largest_set_sizes >= 3],
+    ):
+        score_rows.append(
+            f"| Largest set = {int(largest_size)} | "
+            f"{exact_probability:.3%} | "
+            f"{simulated_probability:.3%} | "
+            f"{int(largest_size)}-point set |"
+        )
+
+    mo.md(
+        "\n".join(
+            [
+                f"With **{set_dice_count_value} d12s**, the exact probability of **some scoreable set (3+)** is **{exact_scoreable_set_probability:.3%}** and the simulated estimate is **{simulated_scoreable_set_probability:.3%}**.",
+                f"If you raise the threshold to **{set_size_value}+**, the exact probability becomes **{exact_selected_threshold_probability:.3%}** and the simulated estimate is **{simulated_selected_threshold_probability:.3%}**.",
+                "",
+                *score_rows,
+            ]
+        )
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    exact_scoreable_set_probability,
+    exact_selected_threshold_probability,
+    set_dice_count_value,
+    set_size_value,
+):
+    threshold_sentence = ""
+    if set_size_value > 3:
+        threshold_sentence = (
+            f" Requiring at least **{set_size_value}** of a kind cuts that probability "
+            f"to **{exact_selected_threshold_probability:.3%}**."
+        )
+
+    mo.md(
+        f"""
+        For **{set_dice_count_value} fair d12s**, a scoreable set appears on about
+        **{exact_scoreable_set_probability:.3%}** of rolls.{threshold_sentence}
+
+        The graph and table above show the main Naasii lesson: three of a kind is the
+        entry point for scoring, but larger sets are much rarer even though they are
+        worth more points.
+
+        Sets are only half of the scoring story. The next question is how often several
+        d12s make a run of consecutive values.
+        """
+    )
     return
 
 
@@ -760,6 +1337,139 @@ def exact_sum_distribution(
 
 
 @app.function(hide_code=True)
+def particular_face_count_distribution(
+    num_dice: int, sides: int = SIDES
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute the exact distribution for how often one chosen face appears."""
+    if num_dice < 0:
+        raise ValueError("num_dice must be nonnegative")
+    if sides <= 0:
+        raise ValueError("sides must be positive")
+
+    count_values = np.arange(num_dice + 1, dtype=np.int64)
+    if sides == 1:
+        probabilities = np.zeros(num_dice + 1, dtype=float)
+        probabilities[-1] = 1.0
+        return count_values, probabilities
+
+    total_outcomes = sides**num_dice
+    probabilities = np.array(
+        [
+            math.comb(num_dice, int(count))
+            * (sides - 1) ** (num_dice - int(count))
+            / total_outcomes
+            for count in count_values
+        ],
+        dtype=float,
+    )
+    return count_values, probabilities
+
+
+@app.function(hide_code=True)
+def _iterate_face_count_vectors(num_dice: int, sides: int = SIDES):
+    """Yield labeled face-count vectors whose entries sum to num_dice."""
+    if num_dice < 0:
+        raise ValueError("num_dice must be nonnegative")
+    if sides <= 0:
+        raise ValueError("sides must be positive")
+
+    current = [0] * sides
+
+    def _recurse(face_index: int, remaining: int):
+        if face_index == sides - 1:
+            current[face_index] = remaining
+            yield tuple(current)
+            return
+
+        for face_count in range(remaining + 1):
+            current[face_index] = face_count
+            yield from _recurse(face_index + 1, remaining - face_count)
+
+    yield from _recurse(0, num_dice)
+
+
+@app.function(hide_code=True)
+def largest_set_size_distribution(
+    num_dice: int, sides: int = SIDES
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute the exact distribution of the largest multiplicity on a roll."""
+    if num_dice < 0:
+        raise ValueError("num_dice must be nonnegative")
+    if sides <= 0:
+        raise ValueError("sides must be positive")
+    if num_dice == 0:
+        return np.array([0], dtype=np.int64), np.array([1.0])
+
+    factorials = [math.factorial(i) for i in range(num_dice + 1)]
+    total_permutations = factorials[num_dice]
+    largest_size_outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
+
+    for count_vector in _iterate_face_count_vectors(num_dice, sides):
+        outcome_count = total_permutations
+        for count in count_vector:
+            outcome_count //= factorials[count]
+        largest_size_outcome_counts[max(count_vector)] += outcome_count
+
+    largest_sizes = np.arange(1, num_dice + 1, dtype=np.int64)
+    probabilities = largest_size_outcome_counts[largest_sizes] / (sides**num_dice)
+    return largest_sizes, probabilities
+
+
+@app.function(hide_code=True)
+def exact_any_set_probability(
+    num_dice: int, min_size: int = 3, sides: int = SIDES
+) -> float:
+    """Compute the probability that some face appears at least min_size times."""
+    if min_size <= 0:
+        return 1.0
+
+    largest_sizes, largest_probabilities = largest_set_size_distribution(
+        num_dice, sides=sides
+    )
+    return float(largest_probabilities[largest_sizes >= min_size].sum())
+
+
+@app.function(hide_code=True)
+def exact_any_face_match_probability(
+    num_dice: int,
+    set_size: int,
+    match_mode: str = "at_least",
+    sides: int = SIDES,
+) -> float:
+    """Compute the probability that some face matches the selected multiplicity event."""
+    if num_dice < 0:
+        raise ValueError("num_dice must be nonnegative")
+    if sides <= 0:
+        raise ValueError("sides must be positive")
+    if match_mode not in {"at_least", "exactly"}:
+        raise ValueError("match_mode must be 'at_least' or 'exactly'")
+    if set_size <= 0:
+        return 1.0
+    if set_size > num_dice:
+        return 0.0
+
+    factorials = [math.factorial(i) for i in range(num_dice + 1)]
+    total_permutations = factorials[num_dice]
+    favorable_outcomes = 0
+
+    for count_vector in _iterate_face_count_vectors(num_dice, sides):
+        if match_mode == "exactly":
+            event_holds = set_size in count_vector
+        else:
+            event_holds = max(count_vector) >= set_size
+
+        if not event_holds:
+            continue
+
+        outcome_count = total_permutations
+        for count in count_vector:
+            outcome_count //= factorials[count]
+        favorable_outcomes += outcome_count
+
+    return float(favorable_outcomes / (sides**num_dice))
+
+
+@app.function(hide_code=True)
 def running_event_rate(
     event_hits: np.ndarray, points: int = 30
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -773,6 +1483,32 @@ def running_event_rate(
 
 @app.cell
 def _():
+    def brute_force_largest_set_size_distribution(num_dice: int) -> np.ndarray:
+        from itertools import product
+
+        outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
+        for outcome in product(range(1, SIDES + 1), repeat=num_dice):
+            _, face_counts = np.unique(outcome, return_counts=True)
+            outcome_counts[face_counts.max()] += 1
+        return outcome_counts / SIDES**num_dice
+
+
+    def brute_force_any_face_match_probability(
+        num_dice: int, set_size: int, match_mode: str
+    ) -> float:
+        from itertools import product
+
+        hits = 0
+        for outcome in product(range(1, SIDES + 1), repeat=num_dice):
+            _, face_counts = np.unique(outcome, return_counts=True)
+            if match_mode == "exactly":
+                event_holds = np.any(face_counts == set_size)
+            else:
+                event_holds = face_counts.max() >= set_size
+            hits += int(event_holds)
+        return hits / SIDES**num_dice
+
+
     def test_roll_d12s_shape():
         rng = np.random.default_rng(7)
         rolls = roll_d12s(trials=7, num_dice=3, rng=rng)
@@ -876,6 +1612,79 @@ def _():
         _, probabilities = exact_sum_distribution(num_dice=4)
 
         assert np.isclose(probabilities.sum(), 1.0)
+
+
+    def test_particular_face_count_distribution_three_dice_known_values():
+        count_values, probabilities = particular_face_count_distribution(num_dice=3)
+
+        expected_probabilities = np.array([11**3, 3 * 11**2, 3 * 11, 1]) / SIDES**3
+        assert np.array_equal(count_values, np.arange(4))
+        assert np.allclose(probabilities, expected_probabilities)
+
+
+    def test_particular_face_count_distribution_probabilities_sum_to_one():
+        count_values, probabilities = particular_face_count_distribution(num_dice=5)
+
+        assert np.array_equal(count_values, np.arange(6))
+        assert np.isclose(probabilities.sum(), 1.0)
+
+
+    def test_largest_set_size_distribution_matches_bruteforce_three_dice():
+        largest_sizes, probabilities = largest_set_size_distribution(num_dice=3)
+
+        assert np.array_equal(largest_sizes, np.array([1, 2, 3]))
+        assert np.allclose(
+            probabilities,
+            brute_force_largest_set_size_distribution(num_dice=3)[largest_sizes],
+        )
+
+
+    def test_largest_set_size_distribution_matches_bruteforce_four_dice():
+        largest_sizes, probabilities = largest_set_size_distribution(num_dice=4)
+
+        assert np.array_equal(largest_sizes, np.array([1, 2, 3, 4]))
+        assert np.allclose(
+            probabilities,
+            brute_force_largest_set_size_distribution(num_dice=4)[largest_sizes],
+        )
+
+
+    def test_largest_set_size_distribution_all_same_anchor():
+        largest_sizes, probabilities = largest_set_size_distribution(num_dice=5)
+
+        assert largest_sizes[-1] == 5
+        assert np.isclose(probabilities[-1], 1 / SIDES**4)
+
+
+    def test_exact_any_set_probability_three_dice_scoreable_anchor():
+        probability = exact_any_set_probability(num_dice=3, min_size=3)
+
+        assert np.isclose(probability, 1 / SIDES**2)
+
+
+    def test_exact_any_set_probability_zero_when_threshold_exceeds_num_dice():
+        probability = exact_any_set_probability(num_dice=4, min_size=5)
+
+        assert probability == 0.0
+
+
+    def test_exact_any_face_match_probability_exactly_matches_bruteforce():
+        probability = exact_any_face_match_probability(
+            num_dice=4, set_size=2, match_mode="exactly"
+        )
+
+        assert np.isclose(
+            probability,
+            brute_force_any_face_match_probability(4, 2, "exactly"),
+        )
+
+
+    def test_exact_any_face_match_probability_at_least_matches_any_set_probability():
+        probability = exact_any_face_match_probability(
+            num_dice=6, set_size=3, match_mode="at_least"
+        )
+
+        assert np.isclose(probability, exact_any_set_probability(6, min_size=3))
 
 
     def test_running_event_rate_uses_all_points_when_input_is_short():
