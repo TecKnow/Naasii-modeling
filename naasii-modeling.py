@@ -110,7 +110,7 @@ def _():
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     mo.md(r"""
     ## How should a real d12 behave?
@@ -1588,7 +1588,7 @@ def _(run_match_mode, run_num_dice, run_trials, scoreable_run_size):
     )
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(
     largest_run_exact_probabilities,
     largest_run_simulated_probabilities,
@@ -1765,8 +1765,7 @@ def _(
         **{selected_run_exact_probability:.3%}**.
 
         That finishes the ordinary fair-d12 model for the two basic scoring patterns.
-        The next step is to ask how Naasii's special dice and values change those
-        probabilities.
+        The next step is to ask what changes when the value **12** becomes wild.
         """
     )
     return
@@ -1775,11 +1774,713 @@ def _(
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## After that: How do Naasii's special dice and values change the model?
+    ## How do wild 12s change scoreable patterns?
 
-    Once sets and runs are understood for ordinary fair d12s, the model can move closer
-    to the actual game by adding the distinctions between dice types and any special
-    values, such as a wild value.
+    Now we add one special rule while keeping the rest of the model simple: if a die
+    shows **12**, it is **wild**. In this section, a wild 12 can stand for any value
+    from \(1\) to \(11\), but it does **not** count as a literal \(12\). If several
+    dice show 12, they are independent wilds and may match the same value or different
+    values.
+
+    We are still studying what patterns are available on **one roll**. Questions about
+    locking dice, rerolling, or whether a player has already scored a particular set or
+    run value come later.
+    """)
+    return
+
+
+@app.cell
+def _():
+    wild_example_records = (
+        (
+            (5, 5, 12),
+            "12 -> 5",
+            "3-set of 5s",
+            "length 2 at best",
+            "Score the 3-set",
+        ),
+        (
+            (4, 6, 12),
+            "12 -> 5",
+            "2-set at best",
+            "3-run: 4, 5, 6",
+            "Score the 3-run",
+        ),
+        (
+            (5, 6, 12, 12),
+            "12s -> 4 and 7",
+            "3-set at best",
+            "4-run: 4, 5, 6, 7",
+            "Score the 4-run",
+        ),
+        (
+            (2, 7, 12, 12),
+            "12s -> 1 and 3",
+            "3-set at best",
+            "3-run: 1, 2, 3",
+            "Tie at 3 points",
+        ),
+        (
+            (2, 8, 12),
+            "Any assignment still misses 3+",
+            "2-set at best",
+            "length 2 at best",
+            "No scoreable pattern",
+        ),
+    )
+    wild_example_rows = "\n".join(
+        (
+            f"| ({', '.join(str(value) for value in _example_roll)}) | "
+            f"{_example_assignment} | "
+            f"{_example_set_result} | "
+            f"{_example_run_result} | "
+            f"{_example_best_choice} |"
+        )
+        for (
+            _example_roll,
+            _example_assignment,
+            _example_set_result,
+            _example_run_result,
+            _example_best_choice,
+        ) in wild_example_records
+    )
+    wild_example_note = (
+        "These examples are chosen to show the main cases. For instance, "
+        f"`(5, 5, 12)` makes the best set size **{best_wild_set_size(np.array([5, 5, 12]))}** "
+        f"while `(4, 6, 12)` makes the best run length **{best_wild_run_length(np.array([4, 6, 12]))}**."
+    )
+    mo.md(
+        "\n".join(
+            [
+                "A few examples show how the wild rule changes the best pattern on one roll:",
+                "",
+                "| Roll | One helpful wild assignment | Best set | Best run | Best scoreable choice |",
+                "| --- | --- | --- | --- | --- |",
+                wild_example_rows,
+                "",
+                wild_example_note,
+            ]
+        )
+    )
+    return
+
+
+@app.cell
+def _():
+    wild_trials = mo.ui.slider(
+        steps=TRIAL_STEPS,
+        value=20_000,
+        label="Wild simulation trials",
+    )
+    wild_num_dice = mo.ui.slider(
+        start=3,
+        stop=9,
+        step=1,
+        value=5,
+        label="Number of d12s",
+    )
+    return wild_num_dice, wild_trials
+
+
+@app.cell(hide_code=True)
+def _(wild_num_dice):
+    wild_set_threshold = mo.ui.slider(
+        start=3,
+        stop=int(wild_num_dice.value),
+        step=1,
+        value=3,
+        label="Set size k",
+    )
+    return (wild_set_threshold,)
+
+
+@app.cell(hide_code=True)
+def _(wild_num_dice):
+    wild_run_threshold = mo.ui.slider(
+        start=3,
+        stop=min(int(wild_num_dice.value), SIDES - 1),
+        step=1,
+        value=3,
+        label="Run size k",
+    )
+    return (wild_run_threshold,)
+
+
+@app.cell(hide_code=True)
+def _(wild_num_dice, wild_run_threshold, wild_set_threshold, wild_trials):
+    mo.vstack(
+        [
+            mo.md(
+                "Use the same roll size and simulation size across all three wild-12 views. The set threshold asks how often a wild roll can make **at least k of a kind**, and the run threshold asks how often it can make **at least k consecutive values**."
+            ),
+            wild_trials,
+            wild_num_dice,
+            wild_set_threshold,
+            wild_run_threshold,
+        ]
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(wild_num_dice, wild_run_threshold, wild_set_threshold, wild_trials):
+    wild_dice_count_value = int(wild_num_dice.value)
+    wild_set_size_value = int(wild_set_threshold.value)
+    wild_run_size_value = int(wild_run_threshold.value)
+    wild_trial_count = int(wild_trials.value)
+
+    wild_rolls = roll_d12s(wild_trial_count, wild_dice_count_value)
+    wild_face_count_matrix = (wild_rolls[:, :, None] == np.arange(1, SIDES + 1)).sum(axis=1)
+    simulated_largest_wild_set_sizes = (
+        wild_face_count_matrix[:, : SIDES - 1].max(axis=1)
+        + wild_face_count_matrix[:, SIDES - 1]
+    )
+    _wild_non_twelve_presence = wild_face_count_matrix[:, : SIDES - 1] > 0
+    _wild_counts = wild_face_count_matrix[:, SIDES - 1]
+    simulated_largest_wild_run_lengths = np.fromiter(
+        (
+            best_wild_run_length_from_presence(_presence_row, int(_wild_count))
+            for _presence_row, _wild_count in zip(
+                _wild_non_twelve_presence,
+                _wild_counts,
+            )
+        ),
+        dtype=np.int64,
+        count=wild_trial_count,
+    )
+    simulated_best_wild_scores = np.maximum(
+        simulated_largest_wild_set_sizes,
+        simulated_largest_wild_run_lengths,
+    )
+    (
+        wild_set_outcome_counts,
+        wild_run_outcome_counts,
+        wild_best_outcome_counts,
+        wild_pattern_compare_counts,
+    ) = wild_pattern_summary_counts(wild_dice_count_value)
+    wild_total_outcomes = int(SIDES**wild_dice_count_value)
+    wild_set_sizes = np.arange(1, wild_dice_count_value + 1, dtype=np.int64)
+    wild_run_lengths = np.arange(
+        1,
+        min(wild_dice_count_value, SIDES - 1) + 1,
+        dtype=np.int64,
+    )
+    wild_best_score_values = np.arange(1, wild_dice_count_value + 1, dtype=np.int64)
+    wild_set_exact_probabilities = (
+        wild_set_outcome_counts[wild_set_sizes] / wild_total_outcomes
+    )
+    wild_run_exact_probabilities = (
+        wild_run_outcome_counts[wild_run_lengths] / wild_total_outcomes
+    )
+    wild_best_exact_probabilities = (
+        wild_best_outcome_counts[wild_best_score_values] / wild_total_outcomes
+    )
+    wild_pattern_compare_exact_probabilities = (
+        wild_pattern_compare_counts / wild_total_outcomes
+    )
+    wild_set_simulated_probabilities = (
+        np.bincount(
+            simulated_largest_wild_set_sizes,
+            minlength=wild_dice_count_value + 1,
+        )[wild_set_sizes]
+        / wild_trial_count
+    )
+    wild_run_simulated_probabilities = (
+        np.bincount(
+            simulated_largest_wild_run_lengths,
+            minlength=wild_dice_count_value + 1,
+        )[wild_run_lengths]
+        / wild_trial_count
+    )
+    wild_best_simulated_probabilities = (
+        np.bincount(
+            simulated_best_wild_scores,
+            minlength=wild_dice_count_value + 1,
+        )[wild_best_score_values]
+        / wild_trial_count
+    )
+    wild_set_event_hits = simulated_largest_wild_set_sizes >= wild_set_size_value
+    wild_run_event_hits = simulated_largest_wild_run_lengths >= wild_run_size_value
+    wild_set_sample_sizes, wild_set_running_rates = running_event_rate(wild_set_event_hits)
+    wild_run_sample_sizes, wild_run_running_rates = running_event_rate(wild_run_event_hits)
+    wild_pattern_compare_simulated_probabilities = np.array(
+        [
+            (simulated_largest_wild_set_sizes > simulated_largest_wild_run_lengths).mean(),
+            (simulated_largest_wild_run_lengths > simulated_largest_wild_set_sizes).mean(),
+            (simulated_largest_wild_set_sizes == simulated_largest_wild_run_lengths).mean(),
+        ],
+        dtype=float,
+    )
+    ordinary_set_sizes, ordinary_set_exact_probabilities = largest_set_size_distribution(
+        wild_dice_count_value
+    )
+    ordinary_run_lengths, ordinary_run_exact_probabilities = largest_run_length_distribution(
+        wild_dice_count_value
+    )
+    return (
+        ordinary_run_exact_probabilities,
+        ordinary_run_lengths,
+        ordinary_set_exact_probabilities,
+        ordinary_set_sizes,
+        simulated_best_wild_scores,
+        simulated_largest_wild_run_lengths,
+        simulated_largest_wild_set_sizes,
+        wild_best_exact_probabilities,
+        wild_best_score_values,
+        wild_best_simulated_probabilities,
+        wild_dice_count_value,
+        wild_pattern_compare_exact_probabilities,
+        wild_pattern_compare_simulated_probabilities,
+        wild_run_exact_probabilities,
+        wild_run_lengths,
+        wild_run_running_rates,
+        wild_run_sample_sizes,
+        wild_run_simulated_probabilities,
+        wild_run_size_value,
+        wild_set_exact_probabilities,
+        wild_set_running_rates,
+        wild_set_sample_sizes,
+        wild_set_simulated_probabilities,
+        wild_set_size_value,
+        wild_set_sizes,
+    )
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### How much do wild 12s help sets?
+
+    Sets are the simpler wild case. Every wild 12 can act like an extra copy of
+    whichever non-12 face already gives the largest group.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    ordinary_set_exact_probabilities,
+    ordinary_set_sizes,
+    wild_set_exact_probabilities,
+    wild_set_simulated_probabilities,
+    wild_set_sizes,
+):
+    wild_set_dist_fig, wild_set_dist_ax = plt.subplots(figsize=(10, 4.5))
+    _wild_set_bar_width = 0.34
+    wild_set_dist_ax.bar(
+        ordinary_set_sizes - _wild_set_bar_width / 2,
+        ordinary_set_exact_probabilities,
+        width=_wild_set_bar_width,
+        alpha=0.75,
+        color="tab:gray",
+        label="Ordinary exact probability",
+    )
+    wild_set_dist_ax.bar(
+        wild_set_sizes + _wild_set_bar_width / 2,
+        wild_set_exact_probabilities,
+        width=_wild_set_bar_width,
+        alpha=0.85,
+        color="tab:orange",
+        label="Wild-12 exact probability",
+    )
+    wild_set_dist_ax.scatter(
+        wild_set_sizes + _wild_set_bar_width / 2,
+        wild_set_simulated_probabilities,
+        color="black",
+        zorder=3,
+        label="Wild-12 simulated frequency",
+    )
+    wild_set_dist_ax.axvline(2.5, color="black", linestyle="--", linewidth=1)
+    wild_set_dist_ax.set_title("Wild 12s shift probability toward larger sets")
+    wild_set_dist_ax.set_xlabel("Largest attainable set size")
+    wild_set_dist_ax.set_ylabel("Probability")
+    wild_set_dist_ax.set_xticks(wild_set_sizes)
+    wild_set_dist_ax.grid(axis="y", alpha=0.2)
+    wild_set_dist_ax.legend()
+    wild_set_dist_fig.tight_layout()
+    wild_set_dist_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    ordinary_set_exact_probabilities,
+    ordinary_set_sizes,
+    simulated_largest_wild_set_sizes,
+    wild_dice_count_value,
+    wild_set_exact_probabilities,
+    wild_set_size_value,
+    wild_set_sizes,
+):
+    ordinary_scoreable_set_probability = float(
+        ordinary_set_exact_probabilities[ordinary_set_sizes >= 3].sum()
+    )
+    wild_scoreable_set_probability = float(
+        wild_set_exact_probabilities[wild_set_sizes >= 3].sum()
+    )
+    ordinary_selected_set_probability = float(
+        ordinary_set_exact_probabilities[ordinary_set_sizes >= wild_set_size_value].sum()
+    )
+    wild_selected_set_probability = float(
+        wild_set_exact_probabilities[wild_set_sizes >= wild_set_size_value].sum()
+    )
+    simulated_scoreable_wild_set_probability = float(
+        (simulated_largest_wild_set_sizes >= 3).mean()
+    )
+    simulated_selected_wild_set_probability = float(
+        (simulated_largest_wild_set_sizes >= wild_set_size_value).mean()
+    )
+    mo.md(
+        "\n".join(
+            [
+                f"With **{wild_dice_count_value} d12s**, wild 12s raise the exact chance of **some scoreable set (3+)** from **{ordinary_scoreable_set_probability:.3%}** to **{wild_scoreable_set_probability:.3%}**.",
+                "",
+                "| Event | Ordinary exact | Wild exact | Wild simulated | Increase from wilds |",
+                "| --- | ---: | ---: | ---: | ---: |",
+                (
+                    f"| Some scoreable set (3+) | {ordinary_scoreable_set_probability:.3%} | "
+                    f"{wild_scoreable_set_probability:.3%} | "
+                    f"{simulated_scoreable_wild_set_probability:.3%} | "
+                    f"{wild_scoreable_set_probability - ordinary_scoreable_set_probability:+.3%} |"
+                ),
+                (
+                    f"| Some set of size {wild_set_size_value}+ | {ordinary_selected_set_probability:.3%} | "
+                    f"{wild_selected_set_probability:.3%} | "
+                    f"{simulated_selected_wild_set_probability:.3%} | "
+                    f"{wild_selected_set_probability - ordinary_selected_set_probability:+.3%} |"
+                ),
+            ]
+        )
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    wild_set_exact_probabilities,
+    wild_set_running_rates,
+    wild_set_sample_sizes,
+    wild_set_size_value,
+    wild_set_sizes,
+):
+    wild_selected_set_exact_probability = float(
+        wild_set_exact_probabilities[wild_set_sizes >= wild_set_size_value].sum()
+    )
+    wild_set_conv_fig, wild_set_conv_ax = plt.subplots(figsize=(10, 4))
+    wild_set_conv_ax.plot(
+        wild_set_sample_sizes,
+        wild_set_running_rates,
+        linewidth=2,
+        label="Running simulated estimate",
+    )
+    wild_set_conv_ax.axhline(
+        wild_selected_set_exact_probability,
+        color="black",
+        linestyle="--",
+        label="Exact probability",
+    )
+    wild_set_conv_ax.set_title(
+        f"Simulation converges for a wild-assisted set of size {wild_set_size_value}+"
+    )
+    wild_set_conv_ax.set_xlabel("Number of simulated rolls used")
+    wild_set_conv_ax.set_ylabel("Probability")
+    wild_set_conv_ax.grid(alpha=0.2)
+    wild_set_conv_ax.legend()
+    wild_set_conv_fig.tight_layout()
+    wild_set_conv_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### How much do wild 12s help runs?
+
+    Runs are subtler. A wild 12 can fill a missing value inside a run, or extend a run
+    outward, but only with values from \(1\) through \(11\).
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    ordinary_run_exact_probabilities,
+    ordinary_run_lengths,
+    wild_run_exact_probabilities,
+    wild_run_lengths,
+    wild_run_simulated_probabilities,
+):
+    wild_run_dist_fig, wild_run_dist_ax = plt.subplots(figsize=(10, 4.5))
+    _wild_run_bar_width = 0.34
+    wild_run_dist_ax.bar(
+        ordinary_run_lengths - _wild_run_bar_width / 2,
+        ordinary_run_exact_probabilities,
+        width=_wild_run_bar_width,
+        alpha=0.75,
+        color="tab:gray",
+        label="Ordinary exact probability",
+    )
+    wild_run_dist_ax.bar(
+        wild_run_lengths + _wild_run_bar_width / 2,
+        wild_run_exact_probabilities,
+        width=_wild_run_bar_width,
+        alpha=0.85,
+        color="tab:green",
+        label="Wild-12 exact probability",
+    )
+    wild_run_dist_ax.scatter(
+        wild_run_lengths + _wild_run_bar_width / 2,
+        wild_run_simulated_probabilities,
+        color="black",
+        zorder=3,
+        label="Wild-12 simulated frequency",
+    )
+    wild_run_dist_ax.axvline(2.5, color="black", linestyle="--", linewidth=1)
+    wild_run_dist_ax.set_title("Wild 12s make longer runs more attainable")
+    wild_run_dist_ax.set_xlabel("Largest attainable run length")
+    wild_run_dist_ax.set_ylabel("Probability")
+    wild_run_dist_ax.set_xticks(wild_run_lengths)
+    wild_run_dist_ax.grid(axis="y", alpha=0.2)
+    wild_run_dist_ax.legend()
+    wild_run_dist_fig.tight_layout()
+    wild_run_dist_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    ordinary_run_exact_probabilities,
+    ordinary_run_lengths,
+    simulated_largest_wild_run_lengths,
+    wild_dice_count_value,
+    wild_run_exact_probabilities,
+    wild_run_lengths,
+    wild_run_size_value,
+):
+    ordinary_scoreable_run_probability = float(
+        ordinary_run_exact_probabilities[ordinary_run_lengths >= 3].sum()
+    )
+    wild_scoreable_run_probability = float(
+        wild_run_exact_probabilities[wild_run_lengths >= 3].sum()
+    )
+    ordinary_selected_run_probability = float(
+        ordinary_run_exact_probabilities[ordinary_run_lengths >= wild_run_size_value].sum()
+    )
+    wild_selected_run_probability = float(
+        wild_run_exact_probabilities[wild_run_lengths >= wild_run_size_value].sum()
+    )
+    simulated_scoreable_wild_run_probability = float(
+        (simulated_largest_wild_run_lengths >= 3).mean()
+    )
+    simulated_selected_wild_run_probability = float(
+        (simulated_largest_wild_run_lengths >= wild_run_size_value).mean()
+    )
+    mo.md(
+        "\n".join(
+            [
+                f"With **{wild_dice_count_value} d12s**, wild 12s raise the exact chance of **some scoreable run (3+)** from **{ordinary_scoreable_run_probability:.3%}** to **{wild_scoreable_run_probability:.3%}**.",
+                "",
+                "| Event | Ordinary exact | Wild exact | Wild simulated | Increase from wilds |",
+                "| --- | ---: | ---: | ---: | ---: |",
+                (
+                    f"| Some scoreable run (3+) | {ordinary_scoreable_run_probability:.3%} | "
+                    f"{wild_scoreable_run_probability:.3%} | "
+                    f"{simulated_scoreable_wild_run_probability:.3%} | "
+                    f"{wild_scoreable_run_probability - ordinary_scoreable_run_probability:+.3%} |"
+                ),
+                (
+                    f"| Some run of length {wild_run_size_value}+ | {ordinary_selected_run_probability:.3%} | "
+                    f"{wild_selected_run_probability:.3%} | "
+                    f"{simulated_selected_wild_run_probability:.3%} | "
+                    f"{wild_selected_run_probability - ordinary_selected_run_probability:+.3%} |"
+                ),
+            ]
+        )
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    wild_run_exact_probabilities,
+    wild_run_lengths,
+    wild_run_running_rates,
+    wild_run_sample_sizes,
+    wild_run_size_value,
+):
+    wild_selected_run_exact_probability = float(
+        wild_run_exact_probabilities[wild_run_lengths >= wild_run_size_value].sum()
+    )
+    wild_run_conv_fig, wild_run_conv_ax = plt.subplots(figsize=(10, 4))
+    wild_run_conv_ax.plot(
+        wild_run_sample_sizes,
+        wild_run_running_rates,
+        linewidth=2,
+        label="Running simulated estimate",
+    )
+    wild_run_conv_ax.axhline(
+        wild_selected_run_exact_probability,
+        color="black",
+        linestyle="--",
+        label="Exact probability",
+    )
+    wild_run_conv_ax.set_title(
+        f"Simulation converges for a wild-assisted run of length {wild_run_size_value}+"
+    )
+    wild_run_conv_ax.set_xlabel("Number of simulated rolls used")
+    wild_run_conv_ax.set_ylabel("Probability")
+    wild_run_conv_ax.grid(alpha=0.2)
+    wild_run_conv_ax.legend()
+    wild_run_conv_fig.tight_layout()
+    wild_run_conv_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ### Which pattern benefits more on one roll?
+
+    A wild 12 can help both sets and runs, but the player can score only **one**
+    element from the roll. So the most useful summary is the best scoreable pattern
+    available right now.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    wild_best_exact_probabilities,
+    wild_best_score_values,
+    wild_best_simulated_probabilities,
+):
+    wild_best_score_mask = wild_best_score_values >= 3
+    wild_best_score_fig, wild_best_score_ax = plt.subplots(figsize=(10, 4.5))
+    wild_best_score_ax.axvspan(0.5, 2.5, color="tab:gray", alpha=0.08)
+    wild_best_score_ax.axvspan(
+        2.5,
+        wild_best_score_values[-1] + 0.5,
+        color="tab:blue",
+        alpha=0.06,
+    )
+    wild_best_score_ax.bar(
+        wild_best_score_values[~wild_best_score_mask],
+        wild_best_exact_probabilities[~wild_best_score_mask],
+        width=0.7,
+        color="tab:gray",
+        alpha=0.85,
+        label="Exact probability (not scoreable)",
+    )
+    wild_best_score_ax.bar(
+        wild_best_score_values[wild_best_score_mask],
+        wild_best_exact_probabilities[wild_best_score_mask],
+        width=0.7,
+        color="tab:blue",
+        alpha=0.85,
+        label="Exact probability (best scoreable pattern)",
+    )
+    wild_best_score_ax.scatter(
+        wild_best_score_values,
+        wild_best_simulated_probabilities,
+        color="black",
+        zorder=3,
+        label="Simulated frequency",
+    )
+    wild_best_score_ax.axvline(2.5, color="black", linestyle="--", linewidth=1)
+    wild_best_score_ax.set_title("Best available score on the roll with wild 12s")
+    wild_best_score_ax.set_xlabel("Best available score")
+    wild_best_score_ax.set_ylabel("Probability")
+    wild_best_score_ax.set_xticks(wild_best_score_values)
+    wild_best_score_ax.grid(axis="y", alpha=0.2)
+    wild_best_score_ax.legend()
+    wild_best_score_fig.tight_layout()
+    wild_best_score_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    simulated_best_wild_scores,
+    wild_best_exact_probabilities,
+    wild_best_score_values,
+    wild_dice_count_value,
+    wild_pattern_compare_exact_probabilities,
+    wild_pattern_compare_simulated_probabilities,
+):
+    wild_no_scoreable_best_probability = float(
+        wild_best_exact_probabilities[wild_best_score_values < 3].sum()
+    )
+    simulated_no_scoreable_best_probability = float((simulated_best_wild_scores < 3).mean())
+    wild_best_score_rows = [
+        "| Outcome | Exact probability | Simulated probability | Meaning |",
+        "| --- | ---: | ---: | --- |",
+        (
+            f"| No scoreable pattern | {wild_no_scoreable_best_probability:.3%} | "
+            f"{simulated_no_scoreable_best_probability:.3%} | No set or run reaches 3 |"
+        ),
+    ]
+    for _wild_best_score, _wild_exact_probability, _wild_simulated_probability in zip(
+        wild_best_score_values[wild_best_score_values >= 3],
+        wild_best_exact_probabilities[wild_best_score_values >= 3],
+        (
+            np.bincount(
+                simulated_best_wild_scores,
+                minlength=wild_dice_count_value + 1,
+            )[wild_best_score_values[wild_best_score_values >= 3]]
+            / simulated_best_wild_scores.size
+        ),
+    ):
+        wild_best_score_rows.append(
+            f"| Best score = {int(_wild_best_score)} | "
+            f"{_wild_exact_probability:.3%} | "
+            f"{_wild_simulated_probability:.3%} | "
+            f"A {int(_wild_best_score)}-point set or run is available |"
+        )
+
+    wild_pattern_balance_rows = [
+        "| Comparison | Exact probability | Simulated probability |",
+        "| --- | ---: | ---: |",
+        (
+            f"| Set gives the higher score | {wild_pattern_compare_exact_probabilities[0]:.3%} | "
+            f"{wild_pattern_compare_simulated_probabilities[0]:.3%} |"
+        ),
+        (
+            f"| Run gives the higher score | {wild_pattern_compare_exact_probabilities[1]:.3%} | "
+            f"{wild_pattern_compare_simulated_probabilities[1]:.3%} |"
+        ),
+        (
+            f"| Set and run tie | {wild_pattern_compare_exact_probabilities[2]:.3%} | "
+            f"{wild_pattern_compare_simulated_probabilities[2]:.3%} |"
+        ),
+    ]
+    mo.md(
+        "\n".join(
+            [
+                "Wild 12s matter most when we look at the best pattern available on the whole roll:",
+                "",
+                *wild_best_score_rows,
+                "",
+                *wild_pattern_balance_rows,
+                "",
+                "The tie row includes rolls where both patterns are equally good, including rolls where neither one reaches a scoreable size.",
+            ]
+        )
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## After that: How do locking, rerolls, and scoring limits change the model?
+
+    Now that the notebook has modeled ordinary sets and runs and then added wild 12s,
+    the next step can stay closer to actual play: how do locking dice and rerolls
+    change the patterns that remain possible on a turn?
+
+    After that, the model can add the longer-term scoring limits on which sets or run
+    values a player is still allowed to score. Only once those rules are in place does
+    it make sense to add Crow dice.
     """)
     return
 
@@ -2074,6 +2775,231 @@ def exact_any_run_probability(
     return float(run_probabilities[run_lengths >= min_length].sum())
 
 
+@app.function
+def best_wild_set_size_from_counts(face_counts: np.ndarray) -> int:
+    """Return the largest set size attainable when 12 is wild."""
+    face_count_values = np.asarray(face_counts, dtype=np.int64)
+    if face_count_values.ndim != 1:
+        raise ValueError("face_counts must be one-dimensional")
+    if face_count_values.size == 0:
+        return 0
+
+    wild_count = int(face_count_values[-1])
+    if face_count_values.size == 1:
+        return wild_count
+
+    return int(face_count_values[:-1].max() + wild_count)
+
+
+@app.function
+def best_wild_set_size(roll: np.ndarray, sides: int = SIDES) -> int:
+    """Return the largest set size attainable on a roll when 12 is wild."""
+    roll_values = np.asarray(roll, dtype=np.int64)
+    if roll_values.ndim != 1:
+        raise ValueError("roll must be one-dimensional")
+
+    face_counts = np.bincount(roll_values, minlength=sides + 1)[1:]
+    return best_wild_set_size_from_counts(face_counts)
+
+
+@app.function
+def best_wild_run_length_from_presence(
+    non_twelve_presence: np.ndarray,
+    wild_count: int,
+) -> int:
+    """Return the largest run length attainable from present values plus wild fillers."""
+    presence_values = np.asarray(non_twelve_presence, dtype=bool)
+    if presence_values.ndim != 1:
+        raise ValueError("non_twelve_presence must be one-dimensional")
+    if wild_count < 0:
+        raise ValueError("wild_count must be nonnegative")
+    if presence_values.size == 0:
+        return 0
+
+    best_length = 0
+    window_start = 0
+    missing_values = 0
+
+    for window_end, has_value in enumerate(presence_values):
+        if not has_value:
+            missing_values += 1
+
+        while missing_values > wild_count:
+            if not presence_values[window_start]:
+                missing_values -= 1
+            window_start += 1
+
+        best_length = max(best_length, window_end - window_start + 1)
+
+    return int(min(best_length, presence_values.size))
+
+
+@app.function
+def best_wild_run_length_from_counts(face_counts: np.ndarray) -> int:
+    """Return the largest run length attainable when 12 is wild."""
+    face_count_values = np.asarray(face_counts, dtype=np.int64)
+    if face_count_values.ndim != 1:
+        raise ValueError("face_counts must be one-dimensional")
+    if face_count_values.size == 0:
+        return 0
+
+    return best_wild_run_length_from_presence(
+        face_count_values[:-1] > 0,
+        int(face_count_values[-1]),
+    )
+
+
+@app.function
+def best_wild_run_length(roll: np.ndarray, sides: int = SIDES) -> int:
+    """Return the largest run length attainable on a roll when 12 is wild."""
+    roll_values = np.asarray(roll, dtype=np.int64)
+    if roll_values.ndim != 1:
+        raise ValueError("roll must be one-dimensional")
+
+    face_counts = np.bincount(roll_values, minlength=sides + 1)[1:]
+    return best_wild_run_length_from_counts(face_counts)
+
+
+@app.function
+def wild_pattern_summary_counts(
+    num_dice: int,
+    sides: int = SIDES,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Count attainable wild-set, wild-run, and best-score outcomes by size."""
+    if num_dice < 0:
+        raise ValueError("num_dice must be nonnegative")
+    if sides <= 1:
+        raise ValueError("sides must be at least 2")
+    if num_dice == 0:
+        return (
+            np.array([1], dtype=np.int64),
+            np.array([1], dtype=np.int64),
+            np.array([1], dtype=np.int64),
+            np.array([0, 0, 1], dtype=np.int64),
+        )
+
+    factorials = [math.factorial(i) for i in range(num_dice + 1)]
+    total_permutations = factorials[num_dice]
+    wild_set_outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
+    wild_run_outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
+    wild_best_outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
+    wild_pattern_compare_counts = np.zeros(3, dtype=np.int64)
+
+    for count_vector in iterate_face_count_vectors(num_dice, sides):
+        outcome_count = total_permutations
+        for count in count_vector:
+            outcome_count //= factorials[count]
+
+        wild_set_size = count_vector[-1] + max(count_vector[:-1])
+        wild_run_length = best_wild_run_length_from_presence(
+            np.array([count > 0 for count in count_vector[:-1]], dtype=bool),
+            int(count_vector[-1]),
+        )
+        wild_best_score = max(wild_set_size, wild_run_length)
+
+        wild_set_outcome_counts[wild_set_size] += outcome_count
+        wild_run_outcome_counts[wild_run_length] += outcome_count
+        wild_best_outcome_counts[wild_best_score] += outcome_count
+        if wild_set_size > wild_run_length:
+            wild_pattern_compare_counts[0] += outcome_count
+        elif wild_run_length > wild_set_size:
+            wild_pattern_compare_counts[1] += outcome_count
+        else:
+            wild_pattern_compare_counts[2] += outcome_count
+
+    return (
+        wild_set_outcome_counts,
+        wild_run_outcome_counts,
+        wild_best_outcome_counts,
+        wild_pattern_compare_counts,
+    )
+
+
+@app.function
+def largest_wild_set_size_distribution(
+    num_dice: int,
+    sides: int = SIDES,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute the exact distribution of the largest attainable set with wild 12s."""
+    wild_set_outcome_counts, _, _, _ = wild_pattern_summary_counts(num_dice, sides=sides)
+    if num_dice == 0:
+        return np.array([0], dtype=np.int64), np.array([1.0])
+
+    wild_set_sizes = np.arange(1, num_dice + 1, dtype=np.int64)
+    wild_set_probabilities = wild_set_outcome_counts[wild_set_sizes] / (sides**num_dice)
+    return wild_set_sizes, wild_set_probabilities
+
+
+@app.function
+def exact_any_wild_set_probability(
+    num_dice: int,
+    min_size: int = 3,
+    sides: int = SIDES,
+) -> float:
+    """Compute the probability that a wild-12 roll can make some set of at least min_size."""
+    if min_size <= 0:
+        return 1.0
+    if min_size > num_dice:
+        return 0.0
+
+    wild_set_sizes, wild_set_probabilities = largest_wild_set_size_distribution(
+        num_dice, sides=sides
+    )
+    return float(wild_set_probabilities[wild_set_sizes >= min_size].sum())
+
+
+@app.function
+def largest_wild_run_length_distribution(
+    num_dice: int,
+    sides: int = SIDES,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute the exact distribution of the largest attainable run with wild 12s."""
+    _, wild_run_outcome_counts, _, _ = wild_pattern_summary_counts(num_dice, sides=sides)
+    if num_dice == 0:
+        return np.array([0], dtype=np.int64), np.array([1.0])
+
+    wild_run_lengths = np.arange(
+        1,
+        min(num_dice, sides - 1) + 1,
+        dtype=np.int64,
+    )
+    wild_run_probabilities = wild_run_outcome_counts[wild_run_lengths] / (sides**num_dice)
+    return wild_run_lengths, wild_run_probabilities
+
+
+@app.function
+def exact_any_wild_run_probability(
+    num_dice: int,
+    min_length: int = 3,
+    sides: int = SIDES,
+) -> float:
+    """Compute the probability that a wild-12 roll can make some run of at least min_length."""
+    if min_length <= 0:
+        return 1.0
+    if min_length > min(num_dice, sides - 1):
+        return 0.0
+
+    wild_run_lengths, wild_run_probabilities = largest_wild_run_length_distribution(
+        num_dice, sides=sides
+    )
+    return float(wild_run_probabilities[wild_run_lengths >= min_length].sum())
+
+
+@app.function
+def best_wild_score_distribution(
+    num_dice: int,
+    sides: int = SIDES,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute the exact distribution of the best available score on a wild-12 roll."""
+    _, _, wild_best_outcome_counts, _ = wild_pattern_summary_counts(num_dice, sides=sides)
+    if num_dice == 0:
+        return np.array([0], dtype=np.int64), np.array([1.0])
+
+    wild_best_scores = np.arange(1, num_dice + 1, dtype=np.int64)
+    wild_best_probabilities = wild_best_outcome_counts[wild_best_scores] / (sides**num_dice)
+    return wild_best_scores, wild_best_probabilities
+
+
 @app.function(hide_code=True)
 def running_event_rate(
     event_hits: np.ndarray, points: int = 30
@@ -2131,11 +3057,44 @@ def _():
             )
         return hits / SIDES**num_dice
 
+    def brute_force_largest_wild_set_size_distribution(num_dice: int) -> np.ndarray:
+        from itertools import product
+
+        outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
+        for outcome in product(range(1, SIDES + 1), repeat=num_dice):
+            outcome_counts[best_wild_set_size(np.array(outcome, dtype=np.int64))] += 1
+        return outcome_counts / SIDES**num_dice
+
+    def brute_force_largest_wild_run_length_distribution(num_dice: int) -> np.ndarray:
+        from itertools import product
+
+        outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
+        for outcome in product(range(1, SIDES + 1), repeat=num_dice):
+            outcome_counts[best_wild_run_length(np.array(outcome, dtype=np.int64))] += 1
+        return outcome_counts / SIDES**num_dice
+
+    def brute_force_best_wild_score_distribution(num_dice: int) -> np.ndarray:
+        from itertools import product
+
+        outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
+        for outcome in product(range(1, SIDES + 1), repeat=num_dice):
+            outcome_array = np.array(outcome, dtype=np.int64)
+            outcome_counts[
+                max(
+                    best_wild_set_size(outcome_array),
+                    best_wild_run_length(outcome_array),
+                )
+            ] += 1
+        return outcome_counts / SIDES**num_dice
+
     return (
         brute_force_any_face_match_probability,
         brute_force_any_run_probability,
+        brute_force_best_wild_score_distribution,
         brute_force_largest_run_length_distribution,
         brute_force_largest_set_size_distribution,
+        brute_force_largest_wild_run_length_distribution,
+        brute_force_largest_wild_set_size_distribution,
     )
 
 
@@ -2143,8 +3102,11 @@ def _():
 def _(
     brute_force_any_face_match_probability,
     brute_force_any_run_probability,
+    brute_force_best_wild_score_distribution,
     brute_force_largest_run_length_distribution,
     brute_force_largest_set_size_distribution,
+    brute_force_largest_wild_run_length_distribution,
+    brute_force_largest_wild_set_size_distribution,
 ):
     def test_roll_d12s_shape():
         rng = np.random.default_rng(7)
@@ -2300,6 +3262,87 @@ def _(
 
     def test_longest_run_length_all_same_anchor():
         assert longest_run_length(np.array([8, 8, 8, 8])) == 1
+
+    def test_best_wild_set_size_uses_wilds_as_extra_copies():
+        assert best_wild_set_size(np.array([5, 5, 12])) == 3
+
+
+    def test_best_wild_set_size_all_wilds_anchor():
+        assert best_wild_set_size(np.array([12, 12, 12, 12])) == 4
+
+
+    def test_best_wild_run_length_fills_internal_gap():
+        assert best_wild_run_length(np.array([4, 6, 12])) == 3
+
+
+    def test_best_wild_run_length_extends_endpoint():
+        assert best_wild_run_length(np.array([4, 5, 12])) == 3
+
+
+    def test_best_wild_run_length_is_capped_at_eleven():
+        assert best_wild_run_length(np.full(12, 12, dtype=np.int64)) == 11
+
+
+    def test_largest_wild_set_size_distribution_matches_bruteforce_three_dice():
+        wild_set_sizes, probabilities = largest_wild_set_size_distribution(num_dice=3)
+
+        assert np.array_equal(wild_set_sizes, np.array([1, 2, 3]))
+        assert np.allclose(
+            probabilities,
+            brute_force_largest_wild_set_size_distribution(num_dice=3)[wild_set_sizes],
+        )
+
+
+    def test_largest_wild_run_length_distribution_matches_bruteforce_three_dice():
+        wild_run_lengths, probabilities = largest_wild_run_length_distribution(num_dice=3)
+
+        assert np.array_equal(wild_run_lengths, np.array([1, 2, 3]))
+        assert np.allclose(
+            probabilities,
+            brute_force_largest_wild_run_length_distribution(num_dice=3)[
+                wild_run_lengths
+            ],
+        )
+
+
+    def test_best_wild_score_distribution_matches_bruteforce_four_dice():
+        wild_best_scores, probabilities = best_wild_score_distribution(num_dice=4)
+
+        assert np.array_equal(wild_best_scores, np.array([1, 2, 3, 4]))
+        assert np.allclose(
+            probabilities,
+            brute_force_best_wild_score_distribution(num_dice=4)[wild_best_scores],
+        )
+
+
+    def test_exact_any_wild_set_probability_matches_bruteforce():
+        probability = exact_any_wild_set_probability(num_dice=4, min_size=3)
+
+        assert np.isclose(
+            probability,
+            brute_force_largest_wild_set_size_distribution(num_dice=4)[3:].sum(),
+        )
+
+
+    def test_exact_any_wild_run_probability_matches_bruteforce():
+        probability = exact_any_wild_run_probability(num_dice=4, min_length=3)
+
+        assert np.isclose(
+            probability,
+            brute_force_largest_wild_run_length_distribution(num_dice=4)[3:].sum(),
+        )
+
+
+    def test_exact_any_wild_set_probability_zero_when_threshold_exceeds_num_dice():
+        probability = exact_any_wild_set_probability(num_dice=4, min_size=5)
+
+        assert probability == 0.0
+
+
+    def test_exact_any_wild_run_probability_zero_when_threshold_exceeds_cap():
+        probability = exact_any_wild_run_probability(num_dice=4, min_length=5)
+
+        assert probability == 0.0
 
 
     def test_largest_run_length_distribution_matches_bruteforce_three_dice():
