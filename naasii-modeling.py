@@ -431,9 +431,7 @@ def _(chi_squared_alpha, chi_squared_df):
         label=f"Right-tail area = {_explorer_alpha:.0%}",
     )
     _explorer_ax.set_xlim(0, _explorer_x_max)
-    _explorer_ax.set_title(
-        f"Chi-squared density with {_explorer_df} degrees of freedom"
-    )
+    _explorer_ax.set_title(f"Chi-squared density with {_explorer_df} degrees of freedom")
     _explorer_ax.set_xlabel("Chi-squared value")
     _explorer_ax.set_ylabel("Density")
     _explorer_ax.grid(axis="y", alpha=0.2)
@@ -560,9 +558,7 @@ def _(multi_trials, num_dice, target_sum):
     multi_trial_count = int(multi_trials.value)
     dice_count = int(num_dice.value)
     requested_target = int(target_sum.value)
-    effective_target = int(
-        np.clip(requested_target, dice_count, dice_count * SIDES)
-    )
+    effective_target = int(np.clip(requested_target, dice_count, dice_count * SIDES))
     rolls = roll_d12s(multi_trial_count, dice_count)
     totals = rolls.sum(axis=1)
 
@@ -714,6 +710,114 @@ def _():
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
+    ### What does \(\binom{n}{k}\) mean?
+
+    We read \(\binom{n}{k}\) as **"n choose k."** It counts how many ways we can choose
+    which \(k\) of the \(n\) dice show the chosen face, without caring about the order
+    in which we list those positions.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    combination_example_num_dice = mo.ui.slider(
+        start=3,
+        stop=6,
+        step=1,
+        value=4,
+        label="Example number of dice n",
+    )
+    return (combination_example_num_dice,)
+
+
+@app.cell(hide_code=True)
+def _(combination_example_num_dice):
+    _example_num_dice_value = int(combination_example_num_dice.value)
+    combination_example_match_count = mo.ui.slider(
+        start=0,
+        stop=_example_num_dice_value,
+        step=1,
+        value=min(2, _example_num_dice_value),
+        label="Example chosen-face count k",
+    )
+    return (combination_example_match_count,)
+
+
+@app.cell(hide_code=True)
+def _(combination_example_match_count, combination_example_num_dice):
+    mo.vstack(
+        [
+            mo.md(
+                "Use a smaller example first. Each row below names a different set of die positions that could show the chosen face."
+            ),
+            combination_example_num_dice,
+            combination_example_match_count,
+        ]
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(combination_example_match_count, combination_example_num_dice):
+    _example_num_dice_value = int(combination_example_num_dice.value)
+    _example_match_count_value = int(combination_example_match_count.value)
+    _position_choices = enumerate_position_choices(
+        _example_num_dice_value, _example_match_count_value
+    )
+    _remaining_dice = _example_num_dice_value - _example_match_count_value
+    _completions_per_choice = (SIDES - 1) ** _remaining_dice
+    _shortcut_value = math.factorial(_example_num_dice_value) // (
+        math.factorial(_example_match_count_value) * math.factorial(_remaining_dice)
+    )
+
+
+    def _format_positions(position_choice: tuple[int, ...]) -> str:
+        if not position_choice:
+            return "none"
+        return ", ".join(str(position) for position in position_choice)
+
+
+    _position_choice_rows = "\n".join(
+        f"| {index} | {_format_positions(position_choice)} |"
+        for index, position_choice in enumerate(_position_choices, start=1)
+    )
+
+    if _remaining_dice == 0:
+        _completion_note = (
+            "Here there are no remaining dice, so each row already determines a full "
+            "favorable outcome."
+        )
+    else:
+        _completion_note = (
+            f"Once one row is fixed, the remaining **{_remaining_dice}** dice can each "
+            f"be any of the other 11 faces, so each row can be completed in "
+            f"$11^{{{_remaining_dice}}} = {_completions_per_choice:,}$ ways."
+        )
+
+    mo.md(
+        "\n".join(
+            [
+                f"For this example, $\\binom{{{_example_num_dice_value}}}{{{_example_match_count_value}}}$ means the number of ways to choose which **{_example_match_count_value}** of the **{_example_num_dice_value}** die positions show the chosen face. We care about **which positions**, not the order in which we name them.",
+                "",
+                "| Choice | Die positions showing the chosen face |",
+                "| ---: | --- |",
+                _position_choice_rows,
+                "",
+                f"There are **{len(_position_choices)}** position choices, so $\\binom{{{_example_num_dice_value}}}{{{_example_match_count_value}}} = {len(_position_choices)}$.",
+                "",
+                _completion_note,
+                "",
+                f"A compact shortcut for the same count is $\\binom{{{_example_num_dice_value}}}{{{_example_match_count_value}}} = \\frac{{{_example_num_dice_value}!}}{{{_example_match_count_value}!({_remaining_dice})!}} = {_shortcut_value}$. This shortcut counts the same position choices more efficiently; it is not a new probability rule.",
+            ]
+        )
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
     ### What does counting mean in probability?
 
     When all \(12^n\) ordered outcomes of \(n\) fair d12s are equally likely, an event
@@ -723,11 +827,17 @@ def _():
     P(E) = \frac{\#\text{ favorable outcomes}}{\#\text{ total outcomes}}.
     \]
 
-    For one chosen face and a fixed set size \(k\), the counting steps are simple:
-    choose which \(k\) dice show that face, then let the remaining dice show any of the
-    other \(11\) faces.
+    For one chosen face and a fixed set size \(k\), the exact-\(k\) event breaks into
+    three factors:
 
-    That gives
+    1. Choose which \(k\) of the \(n\) dice show the chosen face:
+       \(\binom{n}{k}\).
+    2. Make those \(k\) dice land on that face:
+       \(\left(\frac{1}{12}\right)^k\).
+    3. Make the remaining \(n-k\) dice avoid that face:
+       \(\left(\frac{11}{12}\right)^{n-k}\).
+
+    Multiplying those factors gives
 
     \[
     P(\text{chosen face appears exactly } k \text{ times})
@@ -735,7 +845,7 @@ def _():
     \]
 
     If we want "at least \(k\)" instead of "exactly \(k\)," we add the probabilities
-    for \(k, k+1, \dots, n\).
+    for the exact cases \(k, k+1, \dots, n\).
     """)
     return
 
@@ -882,8 +992,7 @@ def _(
         chosen_face_outcome_counts[chosen_face_event_mask].sum()
     )
     chosen_face_event_label = (
-        f"Face {set_target_face_value} appears {set_match_mode_text} "
-        f"{set_size_value} times"
+        f"Face {set_target_face_value} appears {set_match_mode_text} {set_size_value} times"
     )
     total_ordered_outcomes = int(SIDES**set_dice_count_value)
     return (
@@ -934,18 +1043,14 @@ def _(
     else:
         any_face_event_hits = simulated_largest_set_sizes >= set_size_value
 
-    any_face_event_label = (
-        f"Some face appears {set_match_mode_text} {set_size_value} times"
-    )
+    any_face_event_label = f"Some face appears {set_match_mode_text} {set_size_value} times"
     any_face_exact_probability = exact_any_face_match_probability(
         set_dice_count_value,
         set_size_value,
         match_mode=set_match_mode_value,
     )
     any_face_naive_probability = float(SIDES * chosen_face_exact_probability)
-    any_face_overlap_gap = float(
-        any_face_naive_probability - any_face_exact_probability
-    )
+    any_face_overlap_gap = float(any_face_naive_probability - any_face_exact_probability)
     any_face_simulated_probability = float(any_face_event_hits.mean())
     any_face_sample_sizes, any_face_running_rates = running_event_rate(any_face_event_hits)
 
@@ -955,9 +1060,7 @@ def _(
     exact_selected_threshold_probability = exact_any_set_probability(
         set_dice_count_value, min_size=set_size_value
     )
-    simulated_scoreable_set_probability = float(
-        (simulated_largest_set_sizes >= 3).mean()
-    )
+    simulated_scoreable_set_probability = float((simulated_largest_set_sizes >= 3).mean())
     simulated_selected_threshold_probability = float(
         (simulated_largest_set_sizes >= set_size_value).mean()
     )
@@ -1377,6 +1480,21 @@ def particular_face_count_distribution(
 
 
 @app.function(hide_code=True)
+def enumerate_position_choices(
+    num_dice: int, choose_count: int
+) -> tuple[tuple[int, ...], ...]:
+    """List the die-position choices counted by n choose k."""
+    if num_dice < 0:
+        raise ValueError("num_dice must be nonnegative")
+    if choose_count < 0 or choose_count > num_dice:
+        raise ValueError("choose_count must satisfy 0 <= choose_count <= num_dice")
+
+    from itertools import combinations
+
+    return tuple(combinations(range(1, num_dice + 1), choose_count))
+
+
+@app.function(hide_code=True)
 def iterate_face_count_vectors(num_dice: int, sides: int = SIDES):
     """Yield labeled face-count vectors whose entries sum to num_dice."""
     if num_dice < 0:
@@ -1562,7 +1680,9 @@ def _(
         rng_a = np.random.default_rng(31)
         rng_b = np.random.default_rng(31)
 
-        with patch.object(np.random, "default_rng", side_effect=[rng_a, rng_b]) as default_rng:
+        with patch.object(
+            np.random, "default_rng", side_effect=[rng_a, rng_b]
+        ) as default_rng:
             rolls_a = roll_d12s(trials=25, num_dice=2)
             rolls_b = roll_d12s(trials=25, num_dice=2)
 
@@ -1648,6 +1768,29 @@ def _(
 
         assert np.array_equal(count_values, np.arange(6))
         assert np.isclose(probabilities.sum(), 1.0)
+
+
+    def test_enumerate_position_choices_matches_comb_count():
+        position_choices = enumerate_position_choices(5, 3)
+
+        assert len(position_choices) == math.comb(5, 3)
+        assert position_choices[0] == (1, 2, 3)
+        assert position_choices[-1] == (3, 4, 5)
+
+
+    def test_enumerate_position_choices_edge_cases():
+        assert enumerate_position_choices(4, 0) == ((),)
+        assert enumerate_position_choices(4, 4) == ((1, 2, 3, 4),)
+
+
+    def test_enumerate_position_choices_rejects_invalid_k():
+        for invalid_k in (-1, 5):
+            try:
+                enumerate_position_choices(4, invalid_k)
+            except ValueError as exc:
+                assert str(exc) == "choose_count must satisfy 0 <= choose_count <= num_dice"
+            else:
+                assert False, "Expected ValueError for invalid choose_count"
 
 
     def test_largest_set_size_distribution_matches_bruteforce_three_dice():
