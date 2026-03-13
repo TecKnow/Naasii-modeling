@@ -1396,6 +1396,382 @@ def _(
     return
 
 
+@app.cell
+def _():
+    mo.md(r"""
+    ## When do several d12s make a scoreable run?
+
+    In Naasii, a **run** means consecutive values such as \(4, 5, 6\). A run becomes
+    scoreable at length \(3\), and longer runs are worth more points. Unlike sets,
+    repeated faces do not extend the run: the roll \((2, 2, 3, 4)\) still has longest
+    run \(3\), not \(4\), because its distinct values are just \(2, 3, 4\).
+    """)
+    return
+
+
+@app.cell
+def _():
+    run_example_rolls = (
+        (2, 2, 7, 9, 12),
+        (1, 2, 5, 8, 9),
+        (2, 2, 3, 4, 9),
+        (7, 8, 8, 9, 10),
+    )
+    run_example_rows = "\n".join(
+        (
+            f"| ({', '.join(str(value) for value in _example_roll)}) | "
+            f"{', '.join(str(value) for value in np.unique(_example_roll))} | "
+            f"{longest_run_length(_example_roll)} | "
+            f"{'Yes' if longest_run_length(_example_roll) >= 3 else 'No'} |"
+        )
+        for _example_roll in run_example_rolls
+    )
+    mo.md(
+        "\n".join(
+            [
+                "A few five-die examples make the rule concrete:",
+                "",
+                "| Roll | Distinct faces present | Longest run | Scoreable run? |",
+                "| --- | --- | ---: | --- |",
+                run_example_rows,
+            ]
+        )
+    )
+    return
+
+
+@app.cell
+def _():
+    mo.md(r"""
+    ### Why are runs harder to count than sets?
+
+    For sets, the face counts are enough: if one face appears \(k\) times, we have the
+    event. Runs are more delicate because **adjacency** matters. The rolls
+    \((2, 2, 3, 4, 9)\) and \((2, 2, 3, 5, 6)\) have the same multiplicities
+    \((2, 1, 1, 1)\), but only the first contains a 3-run.
+
+    So the exact run calculation still groups outcomes by face-count vectors, but then
+    it asks a new question: which faces are present, and what is the longest
+    consecutive block among those present faces?
+    """)
+    return
+
+
+@app.cell
+def _():
+    mo.md(r"""
+    ### How likely is a scoreable run?
+    """)
+    return
+
+
+@app.cell
+def _():
+    run_trials = mo.ui.slider(
+        steps=TRIAL_STEPS,
+        value=20_000,
+        label="Run simulation trials",
+    )
+    run_num_dice = mo.ui.slider(
+        start=3,
+        stop=9,
+        step=1,
+        value=5,
+        label="Number of d12s",
+    )
+    run_match_mode = mo.ui.dropdown(
+        options={
+            "At least k in a run": "at_least",
+            "Exactly k as the longest run": "exactly",
+        },
+        value="At least k in a run",
+        label="Run event",
+    )
+    return run_match_mode, run_num_dice, run_trials
+
+
+@app.cell
+def _(run_num_dice):
+    scoreable_run_size = mo.ui.slider(
+        start=3,
+        stop=int(run_num_dice.value),
+        step=1,
+        value=3,
+        label="Run size k",
+    )
+    return (scoreable_run_size,)
+
+
+@app.cell
+def _(run_match_mode, run_num_dice, run_trials, scoreable_run_size):
+    mo.vstack(
+        [
+            mo.md(
+                "Use these controls to compare the first scoreable run size, 3, with stricter run targets. The exact model tracks the longest block of consecutive distinct faces, while the simulation estimates the same probability from many random rolls."
+            ),
+            run_trials,
+            run_num_dice,
+            scoreable_run_size,
+            run_match_mode,
+        ]
+    )
+    return
+
+
+@app.cell
+def _(run_match_mode, run_num_dice, run_trials, scoreable_run_size):
+    run_dice_count_value = int(run_num_dice.value)
+    run_size_value = int(scoreable_run_size.value)
+    run_trial_count = int(run_trials.value)
+    run_match_mode_value = str(run_match_mode.value)
+
+    run_rolls = roll_d12s(run_trial_count, run_dice_count_value)
+    run_length_values, largest_run_exact_probabilities = largest_run_length_distribution(
+        run_dice_count_value
+    )
+    largest_run_outcome_counts = largest_run_length_outcome_counts(run_dice_count_value)[
+        run_length_values
+    ]
+    run_face_presence = (run_rolls[:, :, None] == np.arange(1, SIDES + 1)).any(axis=1)
+    run_streak_lengths = run_face_presence.astype(np.int64)
+
+    for _face_index in range(1, SIDES):
+        run_streak_lengths[:, _face_index] = np.where(
+            run_face_presence[:, _face_index],
+            run_streak_lengths[:, _face_index - 1] + 1,
+            0,
+        )
+
+    simulated_largest_run_lengths = run_streak_lengths.max(axis=1)
+    largest_run_simulated_probabilities = (
+        np.bincount(simulated_largest_run_lengths, minlength=run_dice_count_value + 1)[
+            run_length_values
+        ]
+        / run_trial_count
+    )
+
+    if run_match_mode_value == "exactly":
+        run_event_mask = run_length_values == run_size_value
+        run_event_hits = simulated_largest_run_lengths == run_size_value
+        selected_run_event_label = f"The largest run has length exactly {run_size_value}"
+    else:
+        run_event_mask = run_length_values >= run_size_value
+        run_event_hits = simulated_largest_run_lengths >= run_size_value
+        selected_run_event_label = f"Some run has length at least {run_size_value}"
+
+    selected_run_exact_probability = float(
+        largest_run_exact_probabilities[run_event_mask].sum()
+    )
+    selected_run_favorable_outcomes = int(largest_run_outcome_counts[run_event_mask].sum())
+    selected_run_simulated_probability = float(run_event_hits.mean())
+    run_sample_sizes, run_running_rates = running_event_rate(run_event_hits)
+    exact_scoreable_run_probability = exact_any_run_probability(
+        run_dice_count_value, min_length=3
+    )
+    simulated_scoreable_run_probability = float((simulated_largest_run_lengths >= 3).mean())
+    total_run_outcomes = int(SIDES**run_dice_count_value)
+    return (
+        exact_scoreable_run_probability,
+        largest_run_exact_probabilities,
+        largest_run_simulated_probabilities,
+        run_dice_count_value,
+        run_length_values,
+        run_running_rates,
+        run_sample_sizes,
+        run_trial_count,
+        selected_run_event_label,
+        selected_run_exact_probability,
+        selected_run_favorable_outcomes,
+        selected_run_simulated_probability,
+        simulated_scoreable_run_probability,
+        total_run_outcomes,
+    )
+
+
+@app.cell
+def _(
+    largest_run_exact_probabilities,
+    largest_run_simulated_probabilities,
+    run_length_values,
+):
+    run_scoreable_mask = run_length_values >= 3
+    largest_run_fig, largest_run_ax = plt.subplots(figsize=(10, 4.5))
+    largest_run_ax.axvspan(0.5, 2.5, color="tab:gray", alpha=0.08)
+    largest_run_ax.axvspan(2.5, run_length_values[-1] + 0.5, color="tab:green", alpha=0.06)
+    largest_run_ax.bar(
+        run_length_values[~run_scoreable_mask],
+        largest_run_exact_probabilities[~run_scoreable_mask],
+        width=0.7,
+        color="tab:gray",
+        alpha=0.85,
+        label="Exact probability (not scoreable)",
+    )
+    largest_run_ax.bar(
+        run_length_values[run_scoreable_mask],
+        largest_run_exact_probabilities[run_scoreable_mask],
+        width=0.7,
+        color="tab:green",
+        alpha=0.85,
+        label="Exact probability (scoreable)",
+    )
+    largest_run_ax.scatter(
+        run_length_values,
+        largest_run_simulated_probabilities,
+        color="black",
+        zorder=3,
+        label="Simulated frequency",
+    )
+    largest_run_ax.axvline(2.5, color="black", linestyle="--", linewidth=1)
+    largest_run_ax.set_title("Distribution of the largest run length on the roll")
+    largest_run_ax.set_xlabel("Largest run length")
+    largest_run_ax.set_ylabel("Probability")
+    largest_run_ax.set_xticks(run_length_values)
+    largest_run_ax.grid(axis="y", alpha=0.2)
+    largest_run_ax.legend()
+    largest_run_fig.tight_layout()
+    largest_run_fig
+    return
+
+
+@app.cell
+def _(
+    run_trial_count,
+    selected_run_event_label,
+    selected_run_exact_probability,
+    selected_run_favorable_outcomes,
+    selected_run_simulated_probability,
+    total_run_outcomes,
+):
+    mo.md(
+        "\n".join(
+            [
+                f"Counting the event **{selected_run_event_label.lower()}**:",
+                "",
+                "| Quantity | Value |",
+                "| --- | ---: |",
+                f"| Total ordered outcomes | $12^n = {total_run_outcomes:,}$ |",
+                f"| Favorable ordered outcomes | **{selected_run_favorable_outcomes:,}** |",
+                f"| Exact probability | **{selected_run_exact_probability:.3%}** |",
+                f"| Simulated estimate from {run_trial_count:,} rolls | **{selected_run_simulated_probability:.3%}** |",
+                "",
+                "There is no single shortcut like \\(\\binom{n}{k}\\) here, because different patterns of repeated and missing faces can still lead to the same longest run length.",
+            ]
+        )
+    )
+    return
+
+
+@app.cell
+def _(
+    run_running_rates,
+    run_sample_sizes,
+    selected_run_event_label,
+    selected_run_exact_probability,
+):
+    run_convergence_fig, run_convergence_ax = plt.subplots(figsize=(10, 4))
+    run_convergence_ax.plot(
+        run_sample_sizes,
+        run_running_rates,
+        linewidth=2,
+        label="Running simulated estimate",
+    )
+    run_convergence_ax.axhline(
+        selected_run_exact_probability,
+        color="black",
+        linestyle="--",
+        label="Exact probability",
+    )
+    run_convergence_ax.set_title(
+        f"Simulation converges for {selected_run_event_label.lower()}"
+    )
+    run_convergence_ax.set_xlabel("Number of simulated rolls used")
+    run_convergence_ax.set_ylabel("Probability")
+    run_convergence_ax.grid(alpha=0.2)
+    run_convergence_ax.legend()
+    run_convergence_fig.tight_layout()
+    run_convergence_fig
+    return
+
+
+@app.cell
+def _(
+    exact_scoreable_run_probability,
+    largest_run_exact_probabilities,
+    largest_run_simulated_probabilities,
+    run_dice_count_value,
+    run_length_values,
+    selected_run_event_label,
+    selected_run_exact_probability,
+    selected_run_simulated_probability,
+    simulated_scoreable_run_probability,
+):
+    no_scoreable_run_exact_probability = float(
+        largest_run_exact_probabilities[run_length_values < 3].sum()
+    )
+    no_scoreable_run_simulated_probability = float(
+        largest_run_simulated_probabilities[run_length_values < 3].sum()
+    )
+    run_rows = [
+        "| Outcome | Exact probability | Simulated probability | Naasii meaning |",
+        "| --- | ---: | ---: | --- |",
+        (
+            f"| No scoreable run (largest run at most 2) | "
+            f"{no_scoreable_run_exact_probability:.3%} | "
+            f"{no_scoreable_run_simulated_probability:.3%} | "
+            "No run score |"
+        ),
+    ]
+    for _largest_run_size, _exact_probability, _simulated_probability in zip(
+        run_length_values[run_length_values >= 3],
+        largest_run_exact_probabilities[run_length_values >= 3],
+        largest_run_simulated_probabilities[run_length_values >= 3],
+    ):
+        run_rows.append(
+            f"| Largest run = {int(_largest_run_size)} | "
+            f"{_exact_probability:.3%} | "
+            f"{_simulated_probability:.3%} | "
+            f"{int(_largest_run_size)}-point run |"
+        )
+
+    mo.md(
+        "\n".join(
+            [
+                f"With **{run_dice_count_value} d12s**, the exact probability of **some scoreable run (3+)** is **{exact_scoreable_run_probability:.3%}** and the simulated estimate is **{simulated_scoreable_run_probability:.3%}**.",
+                f"For the selected event **{selected_run_event_label.lower()}**, the exact probability is **{selected_run_exact_probability:.3%}** and the simulated estimate is **{selected_run_simulated_probability:.3%}**.",
+                "",
+                *run_rows,
+            ]
+        )
+    )
+    return
+
+
+@app.cell
+def _(
+    exact_scoreable_run_probability,
+    run_dice_count_value,
+    selected_run_event_label,
+    selected_run_exact_probability,
+):
+    mo.md(
+        f"""
+        For **{run_dice_count_value} fair d12s**, a scoreable run appears on about
+        **{exact_scoreable_run_probability:.3%}** of rolls.
+
+        Runs reward a different kind of luck than sets. Duplicates can still matter, but
+        only indirectly: they help only if enough neighboring values also appear to make
+        a long consecutive block. For the selected event
+        **{selected_run_event_label.lower()}**, the exact probability is
+        **{selected_run_exact_probability:.3%}**.
+
+        That finishes the ordinary fair-d12 model for the two basic scoring patterns.
+        The next step is to ask how Naasii's special dice and values change those
+        probabilities.
+        """
+    )
+    return
+
+
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
@@ -1598,6 +1974,106 @@ def exact_any_face_match_probability(
     return float(favorable_outcomes / (sides**num_dice))
 
 
+@app.function
+def longest_run_length(roll: np.ndarray) -> int:
+    """Return the largest number of consecutive distinct faces in a roll."""
+    roll_values = np.asarray(roll, dtype=np.int64)
+    if roll_values.ndim != 1:
+        raise ValueError("roll must be one-dimensional")
+    if roll_values.size == 0:
+        return 0
+
+    distinct_faces = np.unique(roll_values)
+    longest_length = 1
+    current_length = 1
+
+    for previous_face, current_face in zip(distinct_faces[:-1], distinct_faces[1:]):
+        if current_face == previous_face + 1:
+            current_length += 1
+            longest_length = max(longest_length, current_length)
+        else:
+            current_length = 1
+
+    return int(longest_length)
+
+
+@app.function
+def longest_true_streak(values: np.ndarray) -> int:
+    """Return the largest number of consecutive True values."""
+    truth_values = np.asarray(values, dtype=bool)
+    if truth_values.ndim != 1:
+        raise ValueError("values must be one-dimensional")
+    if truth_values.size == 0:
+        return 0
+
+    longest_length = 0
+    current_length = 0
+
+    for is_present in truth_values:
+        if is_present:
+            current_length += 1
+            longest_length = max(longest_length, current_length)
+        else:
+            current_length = 0
+
+    return int(longest_length)
+
+
+@app.function
+def largest_run_length_outcome_counts(num_dice: int, sides: int = SIDES) -> np.ndarray:
+    """Count ordered outcomes by the largest run length present."""
+    if num_dice < 0:
+        raise ValueError("num_dice must be nonnegative")
+    if sides <= 0:
+        raise ValueError("sides must be positive")
+    if num_dice == 0:
+        return np.array([1], dtype=np.int64)
+
+    factorials = [math.factorial(i) for i in range(num_dice + 1)]
+    total_permutations = factorials[num_dice]
+    longest_run_outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
+
+    for count_vector in iterate_face_count_vectors(num_dice, sides):
+        outcome_count = total_permutations
+        for count in count_vector:
+            outcome_count //= factorials[count]
+        longest_run_outcome_counts[
+            longest_true_streak(np.array(count_vector, dtype=np.int64) > 0)
+        ] += outcome_count
+
+    return longest_run_outcome_counts
+
+
+@app.function
+def largest_run_length_distribution(
+    num_dice: int, sides: int = SIDES
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute the exact distribution of the largest run length on a roll."""
+    outcome_counts = largest_run_length_outcome_counts(num_dice, sides=sides)
+    if num_dice == 0:
+        return np.array([0], dtype=np.int64), np.array([1.0])
+
+    run_lengths = np.arange(1, num_dice + 1, dtype=np.int64)
+    probabilities = outcome_counts[run_lengths] / (sides**num_dice)
+    return run_lengths, probabilities
+
+
+@app.function
+def exact_any_run_probability(
+    num_dice: int, min_length: int = 3, sides: int = SIDES
+) -> float:
+    """Compute the probability that some run has length at least min_length."""
+    if min_length <= 0:
+        return 1.0
+    if min_length > num_dice:
+        return 0.0
+
+    run_lengths, run_probabilities = largest_run_length_distribution(
+        num_dice, sides=sides
+    )
+    return float(run_probabilities[run_lengths >= min_length].sum())
+
+
 @app.function(hide_code=True)
 def running_event_rate(
     event_hits: np.ndarray, points: int = 30
@@ -1637,8 +2113,28 @@ def _():
             hits += int(event_holds)
         return hits / SIDES**num_dice
 
+    def brute_force_largest_run_length_distribution(num_dice: int) -> np.ndarray:
+        from itertools import product
+
+        outcome_counts = np.zeros(num_dice + 1, dtype=np.int64)
+        for outcome in product(range(1, SIDES + 1), repeat=num_dice):
+            outcome_counts[longest_run_length(np.array(outcome, dtype=np.int64))] += 1
+        return outcome_counts / SIDES**num_dice
+
+    def brute_force_any_run_probability(num_dice: int, min_length: int) -> float:
+        from itertools import product
+
+        hits = 0
+        for outcome in product(range(1, SIDES + 1), repeat=num_dice):
+            hits += int(
+                longest_run_length(np.array(outcome, dtype=np.int64)) >= min_length
+            )
+        return hits / SIDES**num_dice
+
     return (
         brute_force_any_face_match_probability,
+        brute_force_any_run_probability,
+        brute_force_largest_run_length_distribution,
         brute_force_largest_set_size_distribution,
     )
 
@@ -1646,6 +2142,8 @@ def _():
 @app.cell
 def _(
     brute_force_any_face_match_probability,
+    brute_force_any_run_probability,
+    brute_force_largest_run_length_distribution,
     brute_force_largest_set_size_distribution,
 ):
     def test_roll_d12s_shape():
@@ -1791,6 +2289,61 @@ def _(
                 assert str(exc) == "choose_count must satisfy 0 <= choose_count <= num_dice"
             else:
                 assert False, "Expected ValueError for invalid choose_count"
+
+    def test_longest_run_length_counts_consecutive_distinct_faces():
+        assert longest_run_length(np.array([2, 3, 4, 9])) == 3
+
+
+    def test_longest_run_length_ignores_duplicates():
+        assert longest_run_length(np.array([2, 2, 3, 4])) == 3
+
+
+    def test_longest_run_length_all_same_anchor():
+        assert longest_run_length(np.array([8, 8, 8, 8])) == 1
+
+
+    def test_largest_run_length_distribution_matches_bruteforce_three_dice():
+        run_lengths, probabilities = largest_run_length_distribution(num_dice=3)
+
+        assert np.array_equal(run_lengths, np.array([1, 2, 3]))
+        assert np.allclose(
+            probabilities,
+            brute_force_largest_run_length_distribution(num_dice=3)[run_lengths],
+        )
+
+
+    def test_largest_run_length_distribution_matches_bruteforce_four_dice():
+        run_lengths, probabilities = largest_run_length_distribution(num_dice=4)
+
+        assert np.array_equal(run_lengths, np.array([1, 2, 3, 4]))
+        assert np.allclose(
+            probabilities,
+            brute_force_largest_run_length_distribution(num_dice=4)[run_lengths],
+        )
+
+
+    def test_largest_run_length_distribution_probabilities_sum_to_one():
+        _, probabilities = largest_run_length_distribution(num_dice=5)
+
+        assert np.isclose(probabilities.sum(), 1.0)
+
+
+    def test_exact_any_run_probability_three_dice_scoreable_anchor():
+        probability = exact_any_run_probability(num_dice=3, min_length=3)
+
+        assert np.isclose(probability, 10 * math.factorial(3) / SIDES**3)
+
+
+    def test_exact_any_run_probability_zero_when_threshold_exceeds_num_dice():
+        probability = exact_any_run_probability(num_dice=4, min_length=5)
+
+        assert probability == 0.0
+
+
+    def test_exact_any_run_probability_matches_bruteforce():
+        probability = exact_any_run_probability(num_dice=4, min_length=3)
+
+        assert np.isclose(probability, brute_force_any_run_probability(4, 3))
 
 
     def test_largest_set_size_distribution_matches_bruteforce_three_dice():
