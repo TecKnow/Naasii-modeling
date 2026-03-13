@@ -23,6 +23,10 @@ with app.setup(hide_code=True):
     import scipy
 
     SIDES = 12
+    INITIAL_DICE = 3
+    ADDED_DICE_PER_ROLL = 2
+    MAX_ROLLS = 4
+    MAX_TURN_DICE = INITIAL_DICE + ADDED_DICE_PER_ROLL * (MAX_ROLLS - 1)
 
     TRIAL_STEPS = (
         1,
@@ -110,7 +114,7 @@ def _():
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     mo.md(r"""
     ## How should a real d12 behave?
@@ -1588,7 +1592,7 @@ def _(run_match_mode, run_num_dice, run_trials, scoreable_run_size):
     )
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     largest_run_exact_probabilities,
     largest_run_simulated_probabilities,
@@ -1771,7 +1775,7 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     mo.md(r"""
     ## How do wild 12s change scoreable patterns?
@@ -1894,7 +1898,7 @@ def _(wild_num_dice):
     return (wild_set_threshold,)
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(wild_num_dice):
     wild_run_threshold = mo.ui.slider(
         start=3,
@@ -1906,7 +1910,7 @@ def _(wild_num_dice):
     return (wild_run_threshold,)
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(wild_num_dice, wild_run_threshold, wild_set_threshold, wild_trials):
     mo.vstack(
         [
@@ -1922,7 +1926,7 @@ def _(wild_num_dice, wild_run_threshold, wild_set_threshold, wild_trials):
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(wild_num_dice, wild_run_threshold, wild_set_threshold, wild_trials):
     wild_dice_count_value = int(wild_num_dice.value)
     wild_set_size_value = int(wild_set_threshold.value)
@@ -2046,7 +2050,7 @@ def _(wild_num_dice, wild_run_threshold, wild_set_threshold, wild_trials):
     )
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     mo.md(r"""
     ### How much do wild 12s help sets?
@@ -2057,7 +2061,7 @@ def _():
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     ordinary_set_exact_probabilities,
     ordinary_set_sizes,
@@ -2102,7 +2106,7 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     ordinary_set_exact_probabilities,
     ordinary_set_sizes,
@@ -2155,7 +2159,7 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     wild_set_exact_probabilities,
     wild_set_running_rates,
@@ -2191,7 +2195,7 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     mo.md(r"""
     ### How much do wild 12s help runs?
@@ -2202,7 +2206,7 @@ def _():
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     ordinary_run_exact_probabilities,
     ordinary_run_lengths,
@@ -2247,7 +2251,7 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     ordinary_run_exact_probabilities,
     ordinary_run_lengths,
@@ -2300,7 +2304,7 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     wild_run_exact_probabilities,
     wild_run_lengths,
@@ -2336,7 +2340,7 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     mo.md(r"""
     ### Which pattern benefits more on one roll?
@@ -2348,7 +2352,7 @@ def _():
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     wild_best_exact_probabilities,
     wild_best_score_values,
@@ -2398,7 +2402,7 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     simulated_best_wild_scores,
     wild_best_exact_probabilities,
@@ -2469,17 +2473,430 @@ def _(
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _():
     mo.md(r"""
-    ## After that: How do locking, rerolls, and scoring limits change the model?
+    ## How do locking and rerolls change a turn?
 
-    Now that the notebook has modeled ordinary sets and runs and then added wild 12s,
-    the next step can stay closer to actual play: how do locking dice and rerolls
-    change the patterns that remain possible on a turn?
+    Up to now, each section has treated a roll as a finished object. A real turn in
+    Naasii is more dynamic: the player rolls, locks some dice, rerolls the rest, and
+    can stop as soon as a scoreable pattern appears.
+    """)
+    return
 
-    After that, the model can add the longer-term scoring limits on which sets or run
-    values a player is still allowed to score. Only once those rules are in place does
+
+@app.cell
+def _():
+    mo.md(r"""
+    In this section, the wild-12 rule from the previous section stays active, and we
+    add the turn structure:
+
+    - A turn lasts at most **four** rolls.
+    - Roll 1 starts with **3 dice**.
+    - Rolls 2, 3, and 4 each add **2 new dice**.
+    - If the player continues, every **unlocked** die is rerolled.
+    - After each continued roll, the player must lock **at least one more die**.
+    - Locked dice keep their value and can never be unlocked.
+    - Locked **12s stay wild**; their exact value is chosen only when the player scores.
+    - The player may stop after any roll that already contains a scoreable set or run
+      of size **3 or more**.
+    - If roll 4 still has no scoreable pattern that the player chooses to bank, the
+      turn scores **0**.
+    """)
+    return
+
+
+@app.cell
+def _():
+    mo.md(
+        "\n".join(
+            [
+                "The turn length grows in a fixed pattern:",
+                "",
+                "| Roll | New dice added | Dice visible after the roll | What happens if the player continues? |",
+                "| --- | ---: | ---: | --- |",
+                f"| 1 | {INITIAL_DICE} | {INITIAL_DICE} | Lock at least one die, then reroll every unlocked die |",
+                f"| 2 | {ADDED_DICE_PER_ROLL} | {INITIAL_DICE + ADDED_DICE_PER_ROLL} | Lock at least one more die, then reroll every unlocked die |",
+                f"| 3 | {ADDED_DICE_PER_ROLL} | {INITIAL_DICE + 2 * ADDED_DICE_PER_ROLL} | Lock at least one more die, then reroll every unlocked die |",
+                f"| 4 | {ADDED_DICE_PER_ROLL} | {MAX_TURN_DICE} | Stop and score if possible; otherwise the turn ends at 0 |",
+            ]
+        )
+    )
+    return
+
+
+@app.cell
+def _():
+    reroll_example_rows = [
+        "| 1 | 2, 7, 12 | 12 | 2, 7 | No |",
+        "| 2 | 12, 4, 7, 9, 10 | 12, 7, 9 | 4, 10 | No |",
+        "| 3 | 12, 7, 9, 6, 10, 11, 12 | Stop and score a 6-run: 6, 7, 8, 9, 10, 11 | - | Yes |",
+    ]
+    mo.md(
+        "\n".join(
+            [
+                "A short worked example makes the reroll flow concrete:",
+                "",
+                "| Roll | Dice showing | Choice after the roll | Dice rerolled next | Scoreable pattern yet? |",
+                "| --- | --- | --- | --- | --- |",
+                *reroll_example_rows,
+                "",
+                "Here the first 12 is locked immediately and stays wild. On roll 3, the player can stop because one wild 12 can fill the missing **8** in the run **6-11**.",
+            ]
+        )
+    )
+    return
+
+
+@app.cell
+def _():
+    mo.md(r"""
+    Once locking decisions matter, there is no single exact probability curve like the
+    earlier one-roll sections. Instead, this part of the notebook compares a few
+    simple policies and simulates many turns for each one. These policies are
+    intentionally stylized; they are tools for learning, not claims about optimal play.
+    """)
+    return
+
+
+@app.cell
+def _():
+    reroll_policy_names = ("set-chasing", "run-chasing", "greedy-best")
+    reroll_policy_titles = {
+        "set-chasing": "Set-chasing",
+        "run-chasing": "Run-chasing",
+        "greedy-best": "Greedy-best",
+    }
+    reroll_policy_options = {
+        reroll_policy_titles[_policy_name]: _policy_name
+        for _policy_name in reroll_policy_names
+    }
+    reroll_policy_descriptions = {
+        "set-chasing": (
+            "Lock dice that support the current best wild-assisted set and stop at the "
+            "first 3+ set, even if a run is also available."
+        ),
+        "run-chasing": (
+            "Lock dice that support the current best wild-assisted run and stop at the "
+            "first 3+ run, even if a set is also available."
+        ),
+        "greedy-best": (
+            "Compare the current best set and run each roll, follow the larger one, and "
+            "break ties toward the policy that would lock more dice, then toward runs."
+        ),
+    }
+    reroll_policy_colors = {
+        "set-chasing": "tab:orange",
+        "run-chasing": "tab:green",
+        "greedy-best": "tab:blue",
+    }
+    reroll_simulation_seed_map = {
+        "set-chasing": 202631,
+        "run-chasing": 202632,
+        "greedy-best": 202633,
+    }
+    reroll_sample_seed_map = {
+        "set-chasing": 3101,
+        "run-chasing": 3102,
+        "greedy-best": 3103,
+    }
+    reroll_sample_count = 6
+    return (
+        reroll_policy_colors,
+        reroll_policy_descriptions,
+        reroll_policy_names,
+        reroll_policy_options,
+        reroll_policy_titles,
+        reroll_sample_count,
+        reroll_sample_seed_map,
+        reroll_simulation_seed_map,
+    )
+
+
+@app.cell
+def _(reroll_policy_descriptions, reroll_policy_names, reroll_policy_titles):
+    reroll_policy_rows = "\n".join(
+        f"| {reroll_policy_titles[_policy_name]} | {reroll_policy_descriptions[_policy_name]} |"
+        for _policy_name in reroll_policy_names
+    )
+    mo.md(
+        "\n".join(
+            [
+                "The notebook compares three simple reroll policies:",
+                "",
+                "| Policy | Rule used on each roll |",
+                "| --- | --- |",
+                reroll_policy_rows,
+            ]
+        )
+    )
+    return
+
+
+@app.cell
+def _(reroll_policy_options, reroll_sample_count):
+    reroll_trials = mo.ui.slider(
+        steps=TRIAL_STEPS,
+        value=10_000,
+        label="Turn simulations",
+    )
+    reroll_policy_choice = mo.ui.dropdown(
+        options=reroll_policy_options,
+        value="Greedy-best",
+        label="Sample policy",
+    )
+    reroll_sample_index = mo.ui.slider(
+        start=1,
+        stop=reroll_sample_count,
+        step=1,
+        value=1,
+        label="Sample turn",
+    )
+    return reroll_policy_choice, reroll_sample_index, reroll_trials
+
+
+@app.cell
+def _(reroll_policy_choice, reroll_sample_index, reroll_trials):
+    mo.vstack(
+        [
+            mo.md(
+                "Use the slider to change how many simulated turns each policy gets. The sample-turn controls below use fixed seeds so the examples stay stable while the larger comparison reruns."
+            ),
+            reroll_trials,
+            reroll_policy_choice,
+            reroll_sample_index,
+        ]
+    )
+    return
+
+
+@app.cell
+def _(reroll_trials):
+    reroll_trial_count = int(reroll_trials.value)
+    return (reroll_trial_count,)
+
+
+@app.cell
+def _(reroll_policy_names, reroll_simulation_seed_map, reroll_trial_count):
+    reroll_policy_results = {
+        _policy_name: simulate_policy_trials(
+            _policy_name,
+            num_trials=reroll_trial_count,
+            rng_seed=reroll_simulation_seed_map[_policy_name],
+        )
+        for _policy_name in reroll_policy_names
+    }
+    return (reroll_policy_results,)
+
+
+@app.cell
+def _(reroll_policy_names, reroll_sample_count, reroll_sample_seed_map):
+    reroll_policy_samples = {
+        _policy_name: sample_policy_histories(
+            _policy_name,
+            sample_count=reroll_sample_count,
+            rng_seed=reroll_sample_seed_map[_policy_name],
+        )
+        for _policy_name in reroll_policy_names
+    }
+    return (reroll_policy_samples,)
+
+
+@app.cell
+def _(
+    reroll_policy_colors,
+    reroll_policy_names,
+    reroll_policy_results,
+    reroll_policy_titles,
+):
+    reroll_outcome_fig, reroll_outcome_ax = plt.subplots(figsize=(10, 4.5))
+    reroll_outcome_positions = np.arange(MAX_ROLLS + 1, dtype=float)
+    reroll_outcome_bar_width = 0.24
+    for _policy_index, _policy_name in enumerate(reroll_policy_names):
+        reroll_outcome_ax.bar(
+            reroll_outcome_positions
+            + (_policy_index - (len(reroll_policy_names) - 1) / 2)
+            * reroll_outcome_bar_width,
+            reroll_policy_results[_policy_name]["stop_probabilities"],
+            width=reroll_outcome_bar_width,
+            color=reroll_policy_colors[_policy_name],
+            alpha=0.85,
+            label=reroll_policy_titles[_policy_name],
+        )
+    reroll_outcome_ax.set_title("When does each policy stop and bank a score?")
+    reroll_outcome_ax.set_xlabel("Turn outcome")
+    reroll_outcome_ax.set_ylabel("Probability")
+    reroll_outcome_ax.set_xticks(reroll_outcome_positions)
+    reroll_outcome_ax.set_xticklabels(
+        ["No score", "Roll 1", "Roll 2", "Roll 3", "Roll 4"]
+    )
+    reroll_outcome_ax.grid(axis="y", alpha=0.2)
+    reroll_outcome_ax.legend()
+    reroll_outcome_fig.tight_layout()
+    reroll_outcome_fig
+    return
+
+
+@app.cell
+def _(
+    reroll_policy_colors,
+    reroll_policy_names,
+    reroll_policy_results,
+    reroll_policy_titles,
+):
+    reroll_score_fig, reroll_score_ax = plt.subplots(figsize=(10, 4.5))
+    reroll_score_values = np.arange(MAX_TURN_DICE + 1, dtype=float)
+    reroll_score_bar_width = 0.24
+    for _policy_index, _policy_name in enumerate(reroll_policy_names):
+        reroll_score_ax.bar(
+            reroll_score_values
+            + (_policy_index - (len(reroll_policy_names) - 1) / 2)
+            * reroll_score_bar_width,
+            reroll_policy_results[_policy_name]["final_score_probabilities"],
+            width=reroll_score_bar_width,
+            color=reroll_policy_colors[_policy_name],
+            alpha=0.85,
+            label=reroll_policy_titles[_policy_name],
+        )
+    reroll_score_ax.set_title("Rerolls change both the chance to score and the final score size")
+    reroll_score_ax.set_xlabel("Final score on the turn")
+    reroll_score_ax.set_ylabel("Probability")
+    reroll_score_ax.set_xticks(reroll_score_values)
+    reroll_score_ax.grid(axis="y", alpha=0.2)
+    reroll_score_ax.legend()
+    reroll_score_fig.tight_layout()
+    reroll_score_fig
+    return
+
+
+@app.cell
+def _(
+    reroll_policy_colors,
+    reroll_policy_names,
+    reroll_policy_results,
+    reroll_policy_titles,
+):
+    reroll_cumulative_fig, reroll_cumulative_ax = plt.subplots(figsize=(10, 4.2))
+    reroll_roll_numbers = np.arange(1, MAX_ROLLS + 1, dtype=np.int64)
+    for _policy_name in reroll_policy_names:
+        reroll_cumulative_ax.plot(
+            reroll_roll_numbers,
+            reroll_policy_results[_policy_name]["cumulative_score_probabilities"],
+            marker="o",
+            linewidth=2,
+            color=reroll_policy_colors[_policy_name],
+            label=reroll_policy_titles[_policy_name],
+        )
+    reroll_cumulative_ax.set_title("How quickly does each policy bank a score?")
+    reroll_cumulative_ax.set_xlabel("End of roll")
+    reroll_cumulative_ax.set_ylabel("Cumulative probability of having scored")
+    reroll_cumulative_ax.set_xticks(reroll_roll_numbers)
+    reroll_cumulative_ax.set_ylim(0.0, 1.0)
+    reroll_cumulative_ax.grid(alpha=0.2)
+    reroll_cumulative_ax.legend()
+    reroll_cumulative_fig.tight_layout()
+    reroll_cumulative_fig
+    return
+
+
+@app.cell
+def _(
+    reroll_policy_descriptions,
+    reroll_policy_names,
+    reroll_policy_results,
+    reroll_policy_titles,
+):
+    reroll_summary_rows = [
+        "| Policy | Rule | Score rate | Average final score | Average scoring roll | Scoreless turns |",
+        "| --- | --- | ---: | ---: | ---: | ---: |",
+    ]
+    for _policy_name in reroll_policy_names:
+        reroll_policy_result = reroll_policy_results[_policy_name]
+        reroll_average_stop_roll = reroll_policy_result["average_stop_roll_when_scoring"]
+        reroll_average_stop_roll_text = (
+            f"{reroll_average_stop_roll:.2f}"
+            if not np.isnan(reroll_average_stop_roll)
+            else "n/a"
+        )
+        reroll_summary_rows.append(
+            f"| {reroll_policy_titles[_policy_name]} | "
+            f"{reroll_policy_descriptions[_policy_name]} | "
+            f"{reroll_policy_result['score_rate']:.3%} | "
+            f"{reroll_policy_result['average_final_score']:.3f} | "
+            f"{reroll_average_stop_roll_text} | "
+            f"{reroll_policy_result['scoreless_turn_rate']:.3%} |"
+        )
+    mo.md("\n".join(reroll_summary_rows))
+    return
+
+
+@app.cell
+def _(
+    reroll_policy_choice,
+    reroll_policy_samples,
+    reroll_policy_titles,
+    reroll_sample_index,
+):
+    reroll_selected_policy = reroll_policy_choice.value
+    reroll_selected_turn = reroll_policy_samples[reroll_selected_policy][
+        int(reroll_sample_index.value) - 1
+    ]
+
+    def _reroll_format_values(values: np.ndarray) -> str:
+        if values.size == 0:
+            return "-"
+        return ", ".join(str(int(_value)) for _value in values)
+
+    reroll_history_rows = [
+        "| Roll | Dice showing | Best set | Best run | Decision | Locked after the decision | Dice rerolled next |",
+        "| --- | --- | ---: | ---: | --- | --- | --- |",
+    ]
+    for _turn_step in reroll_selected_turn["history"]:
+        reroll_history_rows.append(
+            f"| {_turn_step['roll_number']} | "
+            f"{_reroll_format_values(_turn_step['values'])} | "
+            f"{_turn_step['best_set_size']} | "
+            f"{_turn_step['best_run_length']} | "
+            f"{_turn_step['decision_description']} | "
+            f"{_reroll_format_values(_turn_step['values'][_turn_step['locked_after_mask']])} | "
+            f"{_reroll_format_values(_turn_step['values'][_turn_step['rerolled_next_mask']])} |"
+        )
+
+    if reroll_selected_turn["final_score"] > 0:
+        reroll_turn_summary = (
+            f"This sample {reroll_policy_titles[reroll_selected_policy]} turn stops on "
+            f"roll **{reroll_selected_turn['stop_roll']}** and banks **{reroll_selected_turn['final_score']}** points with a "
+            f"**{reroll_selected_turn['score_kind']}**."
+        )
+    else:
+        reroll_turn_summary = (
+            f"This sample {reroll_policy_titles[reroll_selected_policy]} turn reaches "
+            f"roll **{MAX_ROLLS}** without banking its target pattern, so it scores **0**."
+        )
+
+    mo.md(
+        "\n".join(
+            [
+                f"Sample turn {int(reroll_sample_index.value)} for **{reroll_policy_titles[reroll_selected_policy]}**:",
+                "",
+                *reroll_history_rows,
+                "",
+                reroll_turn_summary,
+            ]
+        )
+    )
+    return
+
+
+@app.cell
+def _():
+    mo.md(r"""
+    ## After that: Which patterns are still legal to score later in the game?
+
+    The notebook has now moved from one-roll pattern frequencies to full turn-level
+    decisions. The next step is not about making patterns, but about **whether the
+    player is still allowed to score them** after earlier turns have checked off some
+    sets or exhausted some run values. Only after that scoring model is in place does
     it make sense to add Crow dice.
     """)
     return
@@ -3000,6 +3417,493 @@ def best_wild_score_distribution(
     return wild_best_scores, wild_best_probabilities
 
 
+@app.function
+def best_wild_set_target_face(roll: np.ndarray, sides: int = SIDES) -> int:
+    """Return the non-12 face that gives the strongest wild-assisted set."""
+    roll_values = np.asarray(roll, dtype=np.int64)
+    if roll_values.ndim != 1:
+        raise ValueError("roll must be one-dimensional")
+
+    face_counts = np.bincount(roll_values, minlength=sides + 1)[1:]
+    target_scores = face_counts[:-1] + face_counts[-1]
+    return int(np.flatnonzero(target_scores == target_scores.max())[0] + 1)
+
+
+@app.function
+def best_wild_run_interval(
+    dice_values: np.ndarray,
+    locked_mask: np.ndarray | None = None,
+    sides: int = SIDES,
+) -> tuple[int, int, int, int, int]:
+    """Return the preferred run interval for the current roll."""
+    values = np.asarray(dice_values, dtype=np.int64)
+    if values.ndim != 1:
+        raise ValueError("dice_values must be one-dimensional")
+
+    if locked_mask is None:
+        locked_values = np.zeros(values.shape, dtype=bool)
+    else:
+        locked_values = np.asarray(locked_mask, dtype=bool)
+        if locked_values.shape != values.shape:
+            raise ValueError("locked_mask must match dice_values")
+
+    face_counts = np.bincount(values, minlength=sides + 1)[1:]
+    presence = face_counts[:-1] > 0
+    wild_count = int(face_counts[-1])
+    best_interval = (1, 0, 0, 0, 0)
+
+    for start_index in range(presence.size):
+        distinct_present_count = 0
+        for end_index in range(start_index, presence.size):
+            distinct_present_count += int(presence[end_index])
+            interval_length = end_index - start_index + 1
+            missing_count = interval_length - distinct_present_count
+            if missing_count > wild_count:
+                break
+
+            unlocked_literal_count = int(
+                (
+                    (~locked_values)
+                    & (values != sides)
+                    & (values >= start_index + 1)
+                    & (values <= end_index + 1)
+                ).sum()
+            )
+            candidate_interval = (
+                start_index + 1,
+                end_index + 1,
+                interval_length,
+                distinct_present_count,
+                unlocked_literal_count,
+            )
+            if (
+                interval_length > best_interval[2]
+                or (
+                    interval_length == best_interval[2]
+                    and distinct_present_count > best_interval[3]
+                )
+                or (
+                    interval_length == best_interval[2]
+                    and distinct_present_count == best_interval[3]
+                    and unlocked_literal_count > best_interval[4]
+                )
+                or (
+                    interval_length == best_interval[2]
+                    and distinct_present_count == best_interval[3]
+                    and unlocked_literal_count == best_interval[4]
+                    and start_index + 1 < best_interval[0]
+                )
+            ):
+                best_interval = candidate_interval
+
+    return best_interval
+
+
+@app.function
+def choose_set_policy_action(
+    dice_values: np.ndarray,
+    locked_mask: np.ndarray,
+    sides: int = SIDES,
+) -> dict:
+    """Choose the next action for the set-chasing policy."""
+    values = np.asarray(dice_values, dtype=np.int64)
+    locked_values = np.asarray(locked_mask, dtype=bool)
+    if values.ndim != 1:
+        raise ValueError("dice_values must be one-dimensional")
+    if locked_values.shape != values.shape:
+        raise ValueError("locked_mask must match dice_values")
+
+    best_set_size = best_wild_set_size(values, sides=sides)
+    best_run_length = best_wild_run_length(values, sides=sides)
+    target_face = best_wild_set_target_face(values, sides=sides)
+    empty_new_locks = np.zeros(values.shape, dtype=bool)
+    if best_set_size >= 3:
+        return {
+            "decision": "stop",
+            "score_kind": "set",
+            "score": int(best_set_size),
+            "best_set_size": int(best_set_size),
+            "best_run_length": int(best_run_length),
+            "target_face": target_face,
+            "target_interval": None,
+            "new_locks_mask": empty_new_locks,
+            "lock_count": 0,
+            "description": f"Stop and score a {best_set_size}-set of {target_face}s",
+        }
+
+    unlocked_mask = ~locked_values
+    new_locks_mask = unlocked_mask & ((values == target_face) | (values == sides))
+    description = f"Lock {target_face}s and any 12s"
+    if not new_locks_mask.any():
+        unlocked_non_twelve_values = values[unlocked_mask & (values != sides)]
+        if unlocked_non_twelve_values.size > 0:
+            unlocked_face_counts = np.bincount(
+                unlocked_non_twelve_values, minlength=sides + 1
+            )[1:sides]
+            fallback_face = int(
+                np.flatnonzero(unlocked_face_counts == unlocked_face_counts.max())[0] + 1
+            )
+            new_locks_mask = unlocked_mask & (values == fallback_face)
+            description = f"No new {target_face}s appeared, so lock the remaining {fallback_face}s"
+        else:
+            new_locks_mask = unlocked_mask & (values == sides)
+            description = "Only wild 12s remain unlocked, so lock them"
+
+    if not new_locks_mask.any():
+        raise ValueError("set policy must lock at least one die when continuing")
+
+    return {
+        "decision": "continue",
+        "score_kind": "none",
+        "score": 0,
+        "best_set_size": int(best_set_size),
+        "best_run_length": int(best_run_length),
+        "target_face": target_face,
+        "target_interval": None,
+        "new_locks_mask": new_locks_mask,
+        "lock_count": int(new_locks_mask.sum()),
+        "description": description,
+    }
+
+
+@app.function
+def choose_run_policy_action(
+    dice_values: np.ndarray,
+    locked_mask: np.ndarray,
+    sides: int = SIDES,
+) -> dict:
+    """Choose the next action for the run-chasing policy."""
+    values = np.asarray(dice_values, dtype=np.int64)
+    locked_values = np.asarray(locked_mask, dtype=bool)
+    if values.ndim != 1:
+        raise ValueError("dice_values must be one-dimensional")
+    if locked_values.shape != values.shape:
+        raise ValueError("locked_mask must match dice_values")
+
+    best_set_size = best_wild_set_size(values, sides=sides)
+    interval_start, interval_end, best_run_length, _, _ = best_wild_run_interval(
+        values,
+        locked_values,
+        sides=sides,
+    )
+    empty_new_locks = np.zeros(values.shape, dtype=bool)
+    if best_run_length >= 3:
+        return {
+            "decision": "stop",
+            "score_kind": "run",
+            "score": int(best_run_length),
+            "best_set_size": int(best_set_size),
+            "best_run_length": int(best_run_length),
+            "target_face": None,
+            "target_interval": (interval_start, interval_end),
+            "new_locks_mask": empty_new_locks,
+            "lock_count": 0,
+            "description": (
+                f"Stop and score a {best_run_length}-run from {interval_start} to {interval_end}"
+            ),
+        }
+
+    unlocked_mask = ~locked_values
+    new_locks_mask = unlocked_mask & (
+        ((values != sides) & (values >= interval_start) & (values <= interval_end))
+        | (values == sides)
+    )
+    if interval_start == interval_end:
+        description = f"Lock {interval_start}s and any 12s"
+    else:
+        description = f"Lock dice already in {interval_start}-{interval_end} and any 12s"
+
+    if not new_locks_mask.any():
+        unlocked_non_twelve_values = values[unlocked_mask & (values != sides)]
+        if unlocked_non_twelve_values.size > 0:
+            fallback_face = int(unlocked_non_twelve_values.min())
+            new_locks_mask = unlocked_mask & (values == fallback_face)
+            description = (
+                f"The best interval is already locked, so lock the lowest remaining face {fallback_face}"
+            )
+        else:
+            new_locks_mask = unlocked_mask & (values == sides)
+            description = "Only wild 12s remain unlocked, so lock them"
+
+    if not new_locks_mask.any():
+        raise ValueError("run policy must lock at least one die when continuing")
+
+    return {
+        "decision": "continue",
+        "score_kind": "none",
+        "score": 0,
+        "best_set_size": int(best_set_size),
+        "best_run_length": int(best_run_length),
+        "target_face": None,
+        "target_interval": (interval_start, interval_end),
+        "new_locks_mask": new_locks_mask,
+        "lock_count": int(new_locks_mask.sum()),
+        "description": description,
+    }
+
+
+@app.function
+def choose_greedy_policy_action(
+    dice_values: np.ndarray,
+    locked_mask: np.ndarray,
+    sides: int = SIDES,
+) -> dict:
+    """Choose the next action for the greedy-best policy."""
+    values = np.asarray(dice_values, dtype=np.int64)
+    locked_values = np.asarray(locked_mask, dtype=bool)
+    if values.ndim != 1:
+        raise ValueError("dice_values must be one-dimensional")
+    if locked_values.shape != values.shape:
+        raise ValueError("locked_mask must match dice_values")
+
+    set_action = choose_set_policy_action(values, locked_values, sides=sides)
+    run_action = choose_run_policy_action(values, locked_values, sides=sides)
+    best_set_size = int(set_action["best_set_size"])
+    best_run_length = int(run_action["best_run_length"])
+
+    if best_set_size >= 3 or best_run_length >= 3:
+        if best_set_size > best_run_length:
+            greedy_action = dict(set_action)
+            greedy_action["description"] = (
+                f"Greedy-best stops with the larger set: {set_action['description']}"
+            )
+            return greedy_action
+        if best_run_length > best_set_size:
+            greedy_action = dict(run_action)
+            greedy_action["description"] = (
+                f"Greedy-best stops with the larger run: {run_action['description']}"
+            )
+            return greedy_action
+
+        greedy_action = dict(run_action)
+        greedy_action["description"] = (
+            f"Greedy-best sees a tie at {best_run_length} points and takes the run"
+        )
+        return greedy_action
+
+    if best_set_size > best_run_length:
+        greedy_action = dict(set_action)
+        greedy_action["description"] = (
+            f"Greedy-best follows the set plan: {set_action['description']}"
+        )
+        return greedy_action
+
+    if best_run_length > best_set_size:
+        greedy_action = dict(run_action)
+        greedy_action["description"] = (
+            f"Greedy-best follows the run plan: {run_action['description']}"
+        )
+        return greedy_action
+
+    if int(set_action["lock_count"]) > int(run_action["lock_count"]):
+        greedy_action = dict(set_action)
+        greedy_action["description"] = (
+            f"Greedy-best sees a tie in score size and keeps more dice for sets: {set_action['description']}"
+        )
+        return greedy_action
+
+    greedy_action = dict(run_action)
+    greedy_action["description"] = (
+        f"Greedy-best breaks the tie toward runs: {run_action['description']}"
+    )
+    return greedy_action
+
+
+@app.function
+def choose_policy_action(
+    policy_name: str,
+    dice_values: np.ndarray,
+    locked_mask: np.ndarray,
+    sides: int = SIDES,
+) -> dict:
+    """Dispatch to the action rule for one reroll policy."""
+    if policy_name == "set-chasing":
+        return choose_set_policy_action(dice_values, locked_mask, sides=sides)
+    if policy_name == "run-chasing":
+        return choose_run_policy_action(dice_values, locked_mask, sides=sides)
+    if policy_name == "greedy-best":
+        return choose_greedy_policy_action(dice_values, locked_mask, sides=sides)
+    raise ValueError(f"Unknown policy_name: {policy_name}")
+
+
+@app.function
+def simulate_turn(
+    policy_name: str,
+    rng: np.random.Generator | None = None,
+    max_rolls: int = MAX_ROLLS,
+    sides: int = SIDES,
+) -> dict:
+    """Simulate one Naasii turn under a simple locking policy."""
+    if max_rolls <= 0:
+        raise ValueError("max_rolls must be positive")
+
+    turn_rng = np.random.default_rng() if rng is None else rng
+    current_values = turn_rng.integers(1, sides + 1, size=INITIAL_DICE, dtype=np.int64)
+    locked_mask = np.zeros(INITIAL_DICE, dtype=bool)
+    turn_history = []
+
+    for roll_number in range(1, max_rolls + 1):
+        if roll_number > 1:
+            rerolled_mask = ~locked_mask
+            current_values = current_values.copy()
+            if rerolled_mask.any():
+                current_values[rerolled_mask] = turn_rng.integers(
+                    1,
+                    sides + 1,
+                    size=int(rerolled_mask.sum()),
+                    dtype=np.int64,
+                )
+            new_values = turn_rng.integers(
+                1,
+                sides + 1,
+                size=ADDED_DICE_PER_ROLL,
+                dtype=np.int64,
+            )
+            current_values = np.concatenate([current_values, new_values])
+            locked_mask = np.concatenate(
+                [locked_mask, np.zeros(ADDED_DICE_PER_ROLL, dtype=bool)]
+            )
+
+        action = choose_policy_action(policy_name, current_values, locked_mask, sides=sides)
+        locked_before_mask = locked_mask.copy()
+        turn_step = {
+            "roll_number": roll_number,
+            "values": current_values.copy(),
+            "locked_before_mask": locked_before_mask,
+            "best_set_size": int(action["best_set_size"]),
+            "best_run_length": int(action["best_run_length"]),
+            "decision": action["decision"],
+            "score_kind": action["score_kind"],
+            "score": int(action["score"]),
+            "target_face": action["target_face"],
+            "target_interval": action["target_interval"],
+        }
+
+        if action["decision"] == "stop":
+            turn_step["locked_after_mask"] = locked_before_mask.copy()
+            turn_step["rerolled_next_mask"] = np.zeros_like(locked_before_mask)
+            turn_step["decision_description"] = action["description"]
+            turn_history.append(turn_step)
+            return {
+                "policy_name": policy_name,
+                "history": tuple(turn_history),
+                "final_score": int(action["score"]),
+                "stop_roll": roll_number,
+                "score_kind": action["score_kind"],
+            }
+
+        if roll_number == max_rolls:
+            turn_step["decision"] = "no-score"
+            turn_step["score_kind"] = "none"
+            turn_step["score"] = 0
+            turn_step["locked_after_mask"] = locked_before_mask.copy()
+            turn_step["rerolled_next_mask"] = np.zeros_like(locked_before_mask)
+            turn_step["decision_description"] = (
+                f"Roll {max_rolls} is the limit, so the turn ends at 0"
+            )
+            turn_history.append(turn_step)
+            return {
+                "policy_name": policy_name,
+                "history": tuple(turn_history),
+                "final_score": 0,
+                "stop_roll": 0,
+                "score_kind": "none",
+            }
+
+        new_locks_mask = np.asarray(action["new_locks_mask"], dtype=bool)
+        if new_locks_mask.shape != locked_before_mask.shape:
+            raise ValueError("new_locks_mask must match current dice_values")
+        if not new_locks_mask.any():
+            raise ValueError("continuing a turn requires locking at least one die")
+
+        locked_after_mask = locked_before_mask | new_locks_mask
+        turn_step["locked_after_mask"] = locked_after_mask.copy()
+        turn_step["rerolled_next_mask"] = ~locked_after_mask
+        turn_step["decision_description"] = action["description"]
+        turn_history.append(turn_step)
+        locked_mask = locked_after_mask
+
+    raise AssertionError("simulate_turn should always return before the loop ends")
+
+
+@app.function
+def simulate_policy_trials(
+    policy_name: str,
+    num_trials: int,
+    rng_seed: int = 0,
+    sides: int = SIDES,
+) -> dict:
+    """Simulate many turns under one reroll policy and summarize the outcomes."""
+    if num_trials <= 0:
+        raise ValueError("num_trials must be positive")
+
+    trial_rng = np.random.default_rng(rng_seed)
+    final_scores = np.zeros(num_trials, dtype=np.int64)
+    stop_rolls = np.zeros(num_trials, dtype=np.int64)
+    score_kind_codes = np.zeros(num_trials, dtype=np.int64)
+    score_kind_code_map = {"none": 0, "set": 1, "run": 2}
+
+    for trial_index in range(num_trials):
+        turn_result = simulate_turn(policy_name, rng=trial_rng, sides=sides)
+        final_scores[trial_index] = int(turn_result["final_score"])
+        stop_rolls[trial_index] = int(turn_result["stop_roll"])
+        score_kind_codes[trial_index] = score_kind_code_map[turn_result["score_kind"]]
+
+    stop_probabilities = (
+        np.bincount(stop_rolls, minlength=MAX_ROLLS + 1) / num_trials
+    )
+    final_score_probabilities = (
+        np.bincount(final_scores, minlength=MAX_TURN_DICE + 1) / num_trials
+    )
+    cumulative_score_probabilities = np.array(
+        [
+            ((stop_rolls > 0) & (stop_rolls <= roll_number)).mean()
+            for roll_number in range(1, MAX_ROLLS + 1)
+        ],
+        dtype=float,
+    )
+    score_kind_probabilities = (
+        np.bincount(score_kind_codes, minlength=3) / num_trials
+    )
+    scoring_turn_mask = stop_rolls > 0
+    average_stop_roll_when_scoring = (
+        float(stop_rolls[scoring_turn_mask].mean())
+        if scoring_turn_mask.any()
+        else np.nan
+    )
+
+    return {
+        "final_scores": final_scores,
+        "stop_rolls": stop_rolls,
+        "score_kind_probabilities": score_kind_probabilities,
+        "stop_probabilities": stop_probabilities,
+        "final_score_probabilities": final_score_probabilities,
+        "cumulative_score_probabilities": cumulative_score_probabilities,
+        "score_rate": float(scoring_turn_mask.mean()),
+        "average_final_score": float(final_scores.mean()),
+        "average_stop_roll_when_scoring": average_stop_roll_when_scoring,
+        "scoreless_turn_rate": float((final_scores == 0).mean()),
+    }
+
+
+@app.function
+def sample_policy_histories(
+    policy_name: str,
+    sample_count: int,
+    rng_seed: int = 0,
+    sides: int = SIDES,
+) -> tuple[dict, ...]:
+    """Return a small fixed bank of sample turns for one policy."""
+    if sample_count < 0:
+        raise ValueError("sample_count must be nonnegative")
+
+    sample_rng = np.random.default_rng(rng_seed)
+    return tuple(
+        simulate_turn(policy_name, rng=sample_rng, sides=sides)
+        for _ in range(sample_count)
+    )
+
+
 @app.function(hide_code=True)
 def running_event_rate(
     event_hits: np.ndarray, points: int = 30
@@ -3096,6 +4000,31 @@ def _():
         brute_force_largest_wild_run_length_distribution,
         brute_force_largest_wild_set_size_distribution,
     )
+
+
+@app.class_definition
+class SequenceRng:
+    def __init__(self, outputs: list[np.ndarray | list[int]]):
+        self._outputs = [np.asarray(output, dtype=np.int64) for output in outputs]
+
+    def integers(self, low, high=None, size=None, dtype=np.int64):
+        if not self._outputs:
+            raise AssertionError("SequenceRng ran out of outputs")
+
+        next_output = self._outputs.pop(0).astype(dtype)
+        if size is None:
+            expected_shape = ()
+        elif isinstance(size, tuple):
+            expected_shape = size
+        else:
+            expected_shape = (size,)
+
+        if next_output.shape != expected_shape:
+            raise AssertionError(
+                f"Expected shape {expected_shape}, got {next_output.shape}"
+            )
+
+        return next_output
 
 
 @app.cell
@@ -3445,6 +4374,144 @@ def _(
         )
 
         assert np.isclose(probability, exact_any_set_probability(6, min_size=3))
+
+
+    def test_choose_set_policy_action_stops_on_scoreable_set():
+        action = choose_set_policy_action(
+            np.array([5, 5, 12], dtype=np.int64),
+            np.array([False, False, False]),
+        )
+
+        assert action["decision"] == "stop"
+        assert action["score_kind"] == "set"
+        assert action["score"] == 3
+
+
+    def test_choose_set_policy_action_locks_target_face_and_wilds():
+        action = choose_set_policy_action(
+            np.array([5, 8, 12], dtype=np.int64),
+            np.array([False, False, False]),
+        )
+
+        assert action["decision"] == "continue"
+        assert action["target_face"] == 5
+        assert np.array_equal(
+            action["new_locks_mask"],
+            np.array([True, False, True]),
+        )
+
+
+    def test_choose_set_policy_action_fallback_locks_new_face_when_target_is_locked():
+        action = choose_set_policy_action(
+            np.array([5, 5, 1, 7], dtype=np.int64),
+            np.array([True, True, False, False]),
+        )
+
+        assert action["decision"] == "continue"
+        assert np.array_equal(
+            action["new_locks_mask"],
+            np.array([False, False, True, False]),
+        )
+
+
+    def test_choose_run_policy_action_stops_on_scoreable_run():
+        action = choose_run_policy_action(
+            np.array([5, 7, 12], dtype=np.int64),
+            np.array([False, False, False]),
+        )
+
+        assert action["decision"] == "stop"
+        assert action["score_kind"] == "run"
+        assert action["score"] == 3
+        assert action["target_interval"] == (5, 7)
+
+
+    def test_choose_run_policy_action_locks_interval_faces():
+        action = choose_run_policy_action(
+            np.array([5, 6, 9], dtype=np.int64),
+            np.array([False, False, False]),
+        )
+
+        assert action["decision"] == "continue"
+        assert action["target_interval"] == (5, 6)
+        assert np.array_equal(
+            action["new_locks_mask"],
+            np.array([True, True, False]),
+        )
+
+
+    def test_choose_greedy_policy_action_breaks_continue_ties_with_more_locks():
+        action = choose_greedy_policy_action(
+            np.array([5, 5, 6], dtype=np.int64),
+            np.array([False, False, False]),
+        )
+
+        assert action["decision"] == "continue"
+        assert action["target_interval"] == (5, 6)
+        assert np.array_equal(
+            action["new_locks_mask"],
+            np.array([True, True, True]),
+        )
+
+
+    def test_simulate_turn_roll_sizes_and_locked_values_progress_correctly():
+        sequence_rng = SequenceRng(
+            [
+                [2, 7, 12],
+                [8],
+                [9, 10],
+                [9, 10],
+                [4, 11],
+                [6, 9, 10],
+                [11, 7],
+            ]
+        )
+        turn_result = simulate_turn("set-chasing", rng=sequence_rng)
+        turn_history = turn_result["history"]
+
+        assert [step["values"].size for step in turn_history] == [3, 5, 7, 9]
+        assert [step["decision"] for step in turn_history] == [
+            "continue",
+            "continue",
+            "continue",
+            "no-score",
+        ]
+        assert [step["locked_after_mask"].sum() for step in turn_history[:-1]] == [2, 3, 4]
+        assert np.array_equal(turn_history[0]["rerolled_next_mask"], np.array([False, True, False]))
+        assert np.array_equal(turn_history[1]["values"][:3], np.array([2, 8, 12]))
+        assert np.array_equal(turn_history[2]["values"][:3], np.array([2, 8, 12]))
+        assert turn_result["final_score"] == 0
+        assert turn_result["stop_roll"] == 0
+
+
+    def test_simulate_turn_locked_twelves_remain_wild_until_scoring():
+        sequence_rng = SequenceRng(
+            [
+                [5, 9, 12],
+                [5],
+                [1, 2],
+            ]
+        )
+        turn_result = simulate_turn("set-chasing", rng=sequence_rng)
+        turn_history = turn_result["history"]
+
+        assert np.array_equal(turn_history[0]["values"], np.array([5, 9, 12]))
+        assert np.array_equal(turn_history[1]["values"][:3], np.array([5, 5, 12]))
+        assert turn_result["final_score"] == 3
+        assert turn_result["stop_roll"] == 2
+        assert turn_result["score_kind"] == "set"
+
+
+    def test_simulate_policy_trials_reproducible_with_fixed_seed():
+        results_a = simulate_policy_trials("greedy-best", num_trials=40, rng_seed=77)
+        results_b = simulate_policy_trials("greedy-best", num_trials=40, rng_seed=77)
+
+        assert np.array_equal(results_a["final_scores"], results_b["final_scores"])
+        assert np.array_equal(results_a["stop_rolls"], results_b["stop_rolls"])
+        assert np.allclose(
+            results_a["cumulative_score_probabilities"],
+            results_b["cumulative_score_probabilities"],
+        )
 
 
     def test_running_event_rate_uses_all_points_when_input_is_short():

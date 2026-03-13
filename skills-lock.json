@@ -4,17 +4,17 @@
     "anywidget-generator": {
       "source": "marimo-team/skills",
       "sourceType": "github",
-      "computedHash": "7c8e9683f6ba53ed3079e1a6e28d81c7397104fb7f8eedd983eb968597a1714c"
+      "computedHash": "734cdedf8eaedde5451219aa936dc843cf1a72f648e5fed1af6871a8a38bc229"
     },
     "marimo-notebook": {
       "source": "marimo-team/skills",
       "sourceType": "github",
-      "computedHash": "35c744d6512b6c11b5a3ba38c06669c9fd622023786d71e323465e47445820fc"
+      "computedHash": "c9d967d9c1d7f5249510cf2c4c5fdd0fc1d5b56f39f97bcbd0c50ae9e8dfd6ff"
     },
     "wasm-compatibility": {
       "source": "marimo-team/skills",
       "sourceType": "github",
-      "computedHash": "9f1f2d2510d00d71422b585b057d9caa58c3adfe077172409aa872de097cb0a3"
+      "computedHash": "f06388e585e65166d80b780bba31b2e7e878eed1448f14e4187db4d703c3ce15"
     }
   }
 }
