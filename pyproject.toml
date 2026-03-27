@@ -3,7 +3,7 @@ name = "naasii-modeling"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "marimo[recommended]==0.20.4",
     "matplotlib==3.10.8",
